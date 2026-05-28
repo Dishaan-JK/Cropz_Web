@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:http/http.dart' as http;
+import 'pages/help_page.dart';
+import 'pages/privacy_policy_page.dart';
 import 'web_bridge_stub.dart'
     if (dart.library.html) 'web_bridge_web.dart'
     as web_bridge;
@@ -87,7 +89,7 @@ class _CropzWebAppState extends State<CropzWebApp> {
   }
 }
 
-enum _PageMode { home, about, preview }
+enum _PageMode { home, about, help, privacy, preview }
 
 class PreviewPage extends StatefulWidget {
   const PreviewPage({
@@ -121,6 +123,10 @@ class _PreviewPageState extends State<PreviewPage>
       _mode = _PageMode.home;
     } else if (path.first.toLowerCase() == 'about') {
       _mode = _PageMode.about;
+    } else if (path.first.toLowerCase() == 'help') {
+      _mode = _PageMode.help;
+    } else if (path.first.toLowerCase() == 'privacy') {
+      _mode = _PageMode.privacy;
     } else {
       _mode = _PageMode.preview;
       _cardId = path.first;
@@ -224,6 +230,8 @@ class _PreviewPageState extends State<PreviewPage>
                     currentMode: _mode,
                     onHome: () => _navigateTo('/'),
                     onAbout: () => _navigateTo('/about'),
+                    onHelp: () => _navigateTo('/help'),
+                    onPrivacy: () => _navigateTo('/privacy'),
                     onOpenApp: _openInApp,
                     themeMode: widget.themeMode,
                     onThemeModeChanged: widget.onThemeModeChanged,
@@ -238,6 +246,22 @@ class _PreviewPageState extends State<PreviewPage>
                     _PageMode.about => _buildAboutPage(
                       compact: compact,
                       veryCompact: veryCompact,
+                    ),
+                    _PageMode.help => HelpPage(
+                      compact: compact,
+                      veryCompact: veryCompact,
+                      onHome: () => _navigateTo('/'),
+                      onAbout: () => _navigateTo('/about'),
+                      onPrivacy: () => _navigateTo('/privacy'),
+                      onOpenApp: _openInApp,
+                    ),
+                    _PageMode.privacy => PrivacyPolicyPage(
+                      compact: compact,
+                      veryCompact: veryCompact,
+                      onHome: () => _navigateTo('/'),
+                      onAbout: () => _navigateTo('/about'),
+                      onHelp: () => _navigateTo('/help'),
+                      onOpenApp: _openInApp,
                     ),
                     _PageMode.preview => FutureBuilder<Map<String, dynamic>>(
                       future: _future,
@@ -1557,6 +1581,8 @@ class _TopBar extends StatelessWidget {
     required this.currentMode,
     required this.onHome,
     required this.onAbout,
+    required this.onHelp,
+    required this.onPrivacy,
     required this.onOpenApp,
     required this.themeMode,
     required this.onThemeModeChanged,
@@ -1567,6 +1593,8 @@ class _TopBar extends StatelessWidget {
   final _PageMode currentMode;
   final VoidCallback onHome;
   final VoidCallback onAbout;
+  final VoidCallback onHelp;
+  final VoidCallback onPrivacy;
   final VoidCallback onOpenApp;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
@@ -1635,11 +1663,17 @@ class _TopBar extends StatelessWidget {
                   onHome();
                 } else if (value == 'about') {
                   onAbout();
+                } else if (value == 'help') {
+                  onHelp();
+                } else if (value == 'privacy') {
+                  onPrivacy();
                 }
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'home', child: Text('Home')),
                 PopupMenuItem(value: 'about', child: Text('About')),
+                PopupMenuItem(value: 'help', child: Text('Help')),
+                PopupMenuItem(value: 'privacy', child: Text('Privacy')),
               ],
             ),
           ],
@@ -1744,6 +1778,18 @@ class _TopBar extends StatelessWidget {
                     label: 'About',
                     selected: currentMode == _PageMode.about,
                     onTap: onAbout,
+                  ),
+                  const SizedBox(width: 8),
+                  _NavLink(
+                    label: 'Help',
+                    selected: currentMode == _PageMode.help,
+                    onTap: onHelp,
+                  ),
+                  const SizedBox(width: 8),
+                  _NavLink(
+                    label: 'Privacy',
+                    selected: currentMode == _PageMode.privacy,
+                    onTap: onPrivacy,
                   ),
                   const SizedBox(width: 10),
                 ],
