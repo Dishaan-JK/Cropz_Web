@@ -11,7 +11,16 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/api/cards/*"
+  to = "/.netlify/functions/cards/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/error-requests"
+  to = "/.netlify/functions/error_requests"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true

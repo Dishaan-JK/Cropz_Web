@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:http/http.dart' as http;
+import 'pages/help_page.dart';
+import 'pages/privacy_policy_page.dart';
 import 'web_bridge_stub.dart'
     if (dart.library.html) 'web_bridge_web.dart'
     as web_bridge;
@@ -14,51 +16,26 @@ void main() {
   runApp(const CropzWebApp());
 }
 
-class CropzWebApp extends StatefulWidget {
+class CropzWebApp extends StatelessWidget {
   const CropzWebApp({super.key});
-
-  @override
-  State<CropzWebApp> createState() => _CropzWebAppState();
-}
-
-class _CropzWebAppState extends State<CropzWebApp> {
-  ThemeMode _themeMode = ThemeMode.light;
-
-  void _setThemeMode(ThemeMode mode) {
-    if (_themeMode == mode) {
-      return;
-    }
-    setState(() {
-      _themeMode = mode;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFF1A7A5C);
-    final lightScheme = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.light,
-    ).copyWith(
-      surface: const Color(0xFFF8F4EC),
-      surfaceContainer: const Color(0xFFF0E8D8),
-      surfaceContainerHighest: const Color(0xFFE6DBC4),
-      outline: const Color(0xFFCDC2AA),
-    );
-    final darkScheme = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.dark,
-    ).copyWith(
-      surface: const Color(0xFF0D1511),
-      surfaceContainer: const Color(0xFF13201A),
-      surfaceContainerHighest: const Color(0xFF172722),
-      outline: const Color(0xFF33463D),
-    );
+    final lightScheme =
+        ColorScheme.fromSeed(
+          seedColor: seed,
+          brightness: Brightness.light,
+        ).copyWith(
+          surface: const Color(0xFFF8F4EC),
+          surfaceContainer: const Color(0xFFF0E8D8),
+          surfaceContainerHighest: const Color(0xFFE6DBC4),
+          outline: const Color(0xFFCDC2AA),
+        );
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Cropz Card',
-      themeMode: _themeMode,
       theme: ThemeData(
         colorScheme: lightScheme,
         scaffoldBackgroundColor: const Color(0xFFF8F4EC),
@@ -69,35 +46,15 @@ class _CropzWebAppState extends State<CropzWebApp> {
           thickness: 1,
         ),
       ),
-      darkTheme: ThemeData(
-        colorScheme: darkScheme,
-        scaffoldBackgroundColor: const Color(0xFF09130F),
-        useMaterial3: true,
-        textTheme: Typography.material2021().white,
-        dividerTheme: const DividerThemeData(
-          color: Color(0xFF33463D),
-          thickness: 1,
-        ),
-      ),
-      home: PreviewPage(
-        themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
-      ),
+      home: const PreviewPage(),
     );
   }
 }
 
-enum _PageMode { home, about, preview }
+enum _PageMode { home, about, help, privacy, preview }
 
 class PreviewPage extends StatefulWidget {
-  const PreviewPage({
-    super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
-  });
-
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
+  const PreviewPage({super.key});
 
   @override
   State<PreviewPage> createState() => _PreviewPageState();
@@ -105,38 +62,61 @@ class PreviewPage extends StatefulWidget {
 
 class _PreviewPageState extends State<PreviewPage>
     with SingleTickerProviderStateMixin {
+  static const String _playStoreUrl =
+      'https://play.google.com/store/apps/details?id=in.cropz.cropz_app';
   Future<Map<String, dynamic>>? _future;
   String? _cardId;
+  late _PreviewFilters _filters;
   late _PageMode _mode;
   late AnimationController _bgController;
+  StreamSubscription<void>? _navigationSub;
 
   @override
   void initState() {
     super.initState();
-    final uri = Uri.base;
-    final path = uri.pathSegments
-        .where((segment) => segment.isNotEmpty)
-        .toList();
-    if (path.isEmpty) {
-      _mode = _PageMode.home;
-    } else if (path.first.toLowerCase() == 'about') {
-      _mode = _PageMode.about;
-    } else {
-      _mode = _PageMode.preview;
-      _cardId = path.first;
-      _future = _fetchCard(_cardId!);
-    }
+    _applyUri(Uri.base);
 
     _bgController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
+    _navigationSub = web_bridge.watchNavigation(() {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _applyUri(Uri.base);
+      });
+    });
   }
 
   @override
   void dispose() {
+    _navigationSub?.cancel();
     _bgController.dispose();
     super.dispose();
+  }
+
+  void _applyUri(Uri uri) {
+    final path = uri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    _cardId = null;
+    _future = null;
+    if (path.isEmpty) {
+      _mode = _PageMode.home;
+    } else if (path.first.toLowerCase() == 'about') {
+      _mode = _PageMode.about;
+    } else if (path.first.toLowerCase() == 'help') {
+      _mode = _PageMode.help;
+    } else if (path.first.toLowerCase() == 'privacy') {
+      _mode = _PageMode.privacy;
+    } else {
+      _mode = _PageMode.preview;
+      _cardId = path.first;
+      _future = _fetchCard(_cardId!);
+    }
+    _filters = _PreviewFilters.fromUri(uri);
   }
 
   Future<Map<String, dynamic>> _fetchCard(String cardId) async {
@@ -152,7 +132,9 @@ class _PreviewPageState extends State<PreviewPage>
   }
 
   Future<void> _openInApp() async {
-    final deepLink = _cardId == null
+    final deepLink = _mode == _PageMode.help
+        ? 'cropzcard://help'
+        : _cardId == null
         ? 'cropzcard://card'
         : 'cropzcard://card/$_cardId';
     var appOpened = false;
@@ -166,8 +148,11 @@ class _PreviewPageState extends State<PreviewPage>
     await visibilitySub.cancel();
 
     if (!appOpened && mounted) {
+      web_bridge.openExternalUrl(_playStoreUrl);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cropz Card not installed.')),
+        const SnackBar(
+          content: Text('Cropz Card not installed. Opening Play Store.'),
+        ),
       );
     }
   }
@@ -177,13 +162,16 @@ class _PreviewPageState extends State<PreviewPage>
     if (!copied || !mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Phone number copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Phone number copied')));
   }
 
   void _navigateTo(String path) {
     web_bridge.navigateTo(path);
+    setState(() {
+      _applyUri(Uri.parse(path));
+    });
   }
 
   @override
@@ -224,9 +212,9 @@ class _PreviewPageState extends State<PreviewPage>
                     currentMode: _mode,
                     onHome: () => _navigateTo('/'),
                     onAbout: () => _navigateTo('/about'),
+                    onHelp: () => _navigateTo('/help'),
+                    onPrivacy: () => _navigateTo('/privacy'),
                     onOpenApp: _openInApp,
-                    themeMode: widget.themeMode,
-                    onThemeModeChanged: widget.onThemeModeChanged,
                   ),
                 ),
                 Expanded(
@@ -238,6 +226,22 @@ class _PreviewPageState extends State<PreviewPage>
                     _PageMode.about => _buildAboutPage(
                       compact: compact,
                       veryCompact: veryCompact,
+                    ),
+                    _PageMode.help => HelpPage(
+                      compact: compact,
+                      veryCompact: veryCompact,
+                      onHome: () => _navigateTo('/'),
+                      onAbout: () => _navigateTo('/about'),
+                      onPrivacy: () => _navigateTo('/privacy'),
+                      onOpenApp: _openInApp,
+                    ),
+                    _PageMode.privacy => PrivacyPolicyPage(
+                      compact: compact,
+                      veryCompact: veryCompact,
+                      onHome: () => _navigateTo('/'),
+                      onAbout: () => _navigateTo('/about'),
+                      onHelp: () => _navigateTo('/help'),
+                      onOpenApp: _openInApp,
                     ),
                     _PageMode.preview => FutureBuilder<Map<String, dynamic>>(
                       future: _future,
@@ -271,6 +275,18 @@ class _PreviewPageState extends State<PreviewPage>
                             (data['address'] as Map?)
                                 ?.cast<String, dynamic>() ??
                             <String, dynamic>{};
+                        final addresses =
+                            ((data['addresses'] as List?) ?? const <dynamic>[])
+                                .map(
+                                  (entry) =>
+                                      (entry as Map).cast<String, dynamic>(),
+                                )
+                                .toList();
+                        final visibleAddresses = addresses.isNotEmpty
+                            ? addresses
+                            : (address.isEmpty
+                                  ? const <Map<String, dynamic>>[]
+                                  : [address]);
                         final banks =
                             ((data['bankAccounts'] as List?) ??
                                     const <dynamic>[])
@@ -293,8 +309,9 @@ class _PreviewPageState extends State<PreviewPage>
                           business: business,
                           license: license,
                           banks: banks,
-                          address: address,
+                          addresses: visibleAddresses,
                           documents: documents,
+                          filters: _filters,
                           compact: compact,
                           veryCompact: veryCompact,
                         );
@@ -310,10 +327,7 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
-  Widget _buildHomePage({
-    required bool compact,
-    required bool veryCompact,
-  }) {
+  Widget _buildHomePage({required bool compact, required bool veryCompact}) {
     const sampleCard = {
       'firm': 'Aadhira Agro Ventures',
       'owner': 'Keerthi M',
@@ -378,11 +392,7 @@ class _PreviewPageState extends State<PreviewPage>
             children: [
               _heroCopy(headlineStyle),
               const SizedBox(height: 24),
-              _heroPreview(
-                card,
-                compact: compact,
-                veryCompact: veryCompact,
-              ),
+              _heroPreview(card, compact: compact, veryCompact: veryCompact),
             ],
           )
         : Row(
@@ -409,7 +419,9 @@ class _PreviewPageState extends State<PreviewPage>
         veryCompact ? 20 : (compact ? 24 : 30),
       ),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(veryCompact ? 24 : (compact ? 28 : 40)),
+        borderRadius: BorderRadius.circular(
+          veryCompact ? 24 : (compact ? 28 : 40),
+        ),
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
         border: Border.all(
           color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.82),
@@ -548,12 +560,16 @@ class _PreviewPageState extends State<PreviewPage>
             end: Alignment.bottomRight,
             colors: [Color(0xFFF5F0E3), Color(0xFFEAE1C9), Color(0xFFF0E7D6)],
           );
-    final panelBorder = isDark ? const Color(0xFF304338) : const Color(0xFFD3C8AF);
+    final panelBorder = isDark
+        ? const Color(0xFF304338)
+        : const Color(0xFFD3C8AF);
     final shadowColor = isDark
         ? Colors.black.withValues(alpha: 0.38)
         : const Color(0xFFB9A98C).withValues(alpha: 0.16);
     final accent = isDark ? const Color(0xFF74E0AE) : const Color(0xFF1C936B);
-    final accentBorder = isDark ? const Color(0xFF2E6C53) : const Color(0xFF0D5F44);
+    final accentBorder = isDark
+        ? const Color(0xFF2E6C53)
+        : const Color(0xFF0D5F44);
     final titleColor = isDark ? const Color(0xFFF4F7F5) : Colors.black;
     final subtitleColor = isDark
         ? Colors.white.withValues(alpha: 0.72)
@@ -573,19 +589,19 @@ class _PreviewPageState extends State<PreviewPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-          padding: EdgeInsets.all(veryCompact ? 18 : 22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(veryCompact ? 24 : 30),
-            gradient: panelGradient,
-            border: Border.all(color: panelBorder, width: 1.1),
-            boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 24,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
+            padding: EdgeInsets.all(veryCompact ? 18 : 22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(veryCompact ? 24 : 30),
+              gradient: panelGradient,
+              border: Border.all(color: panelBorder, width: 1.1),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: 24,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -595,7 +611,9 @@ class _PreviewPageState extends State<PreviewPage>
                       width: veryCompact ? 44 : 52,
                       height: veryCompact ? 44 : 52,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(veryCompact ? 16 : 18),
+                        borderRadius: BorderRadius.circular(
+                          veryCompact ? 16 : 18,
+                        ),
                         color: accent,
                         border: Border.all(color: accentBorder, width: 1),
                       ),
@@ -893,10 +911,7 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
-  Widget _finalCta({
-    required bool compact,
-    required bool veryCompact,
-  }) {
+  Widget _finalCta({required bool compact, required bool veryCompact}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final background = isDark
@@ -911,10 +926,10 @@ class _PreviewPageState extends State<PreviewPage>
             colors: [Color(0xFF1A7A5C), Color(0xFF145743)],
           );
     return Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: veryCompact ? 18 : (compact ? 20 : 30),
-          vertical: veryCompact ? 22 : (compact ? 24 : 28),
-        ),
+      padding: EdgeInsets.symmetric(
+        horizontal: veryCompact ? 18 : (compact ? 20 : 30),
+        vertical: veryCompact ? 22 : (compact ? 24 : 28),
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: background,
@@ -960,11 +975,7 @@ class _PreviewPageState extends State<PreviewPage>
         SizedBox(height: 10),
         Text(
           'Use the same web address, keep the current card flow, and present it with the polish expected from a modern product company.',
-          style: TextStyle(
-            color: bodyColor,
-            fontSize: 15.5,
-            height: 1.55,
-          ),
+          style: TextStyle(color: bodyColor, fontSize: 15.5, height: 1.55),
         ),
       ],
     );
@@ -980,10 +991,12 @@ class _PreviewPageState extends State<PreviewPage>
         FilledButton(
           onPressed: _openInApp,
           style: FilledButton.styleFrom(
-            backgroundColor:
-                isDark ? theme.colorScheme.surface : const Color(0xFFF8F4EC),
-            foregroundColor:
-                isDark ? theme.colorScheme.onSurface : const Color(0xFF153E39),
+            backgroundColor: isDark
+                ? theme.colorScheme.surface
+                : const Color(0xFFF8F4EC),
+            foregroundColor: isDark
+                ? theme.colorScheme.onSurface
+                : const Color(0xFF153E39),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
@@ -1007,10 +1020,7 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
-  Widget _buildAboutPage({
-    required bool compact,
-    required bool veryCompact,
-  }) {
+  Widget _buildAboutPage({required bool compact, required bool veryCompact}) {
     return ListView(
       padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
       children: [
@@ -1120,18 +1130,14 @@ class _PreviewPageState extends State<PreviewPage>
     required Map<String, dynamic> business,
     required Map<String, dynamic> license,
     required List<Map<String, dynamic>> banks,
-    required Map<String, dynamic> address,
+    required List<Map<String, dynamic>> addresses,
     required List<Map<String, dynamic>> documents,
+    required _PreviewFilters filters,
     required bool compact,
     required bool veryCompact,
   }) {
-    final sections = [
-      _DataPanel(title: 'Digital card', data: digital),
-      _DataPanel(title: 'Business', data: business),
-      _DataPanel(title: 'License info', data: license),
-      _DocumentPanel(documents: documents),
-      _DataPanel(title: 'Address', data: address),
-    ];
+    final visibleBanks = filters.filterIndexed(banks);
+    final visibleAddresses = filters.filterAddress(addresses);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
@@ -1155,23 +1161,76 @@ class _PreviewPageState extends State<PreviewPage>
                   compact
                       ? Column(
                           children: [
-                            for (final section in sections) ...[
-                              section,
+                            _DataPanel(title: 'Digital card', data: digital),
+                            if (filters.showBusiness) ...[
                               const SizedBox(height: 14),
+                              _DataPanel(title: 'Business', data: business),
                             ],
-                            _BankPanel(banks: banks),
+                            if (filters.showLicenseInfo) ...[
+                              const SizedBox(height: 14),
+                              _DataPanel(title: 'License info', data: license),
+                            ],
+                            if (documents.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              _DocumentPanel(documents: documents),
+                            ],
+                            if (filters.showAddress &&
+                                visibleAddresses.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              _AddressPanel(addresses: visibleAddresses),
+                            ],
+                            if (filters.showBanks &&
+                                visibleBanks.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              _BankPanel(banks: visibleBanks),
+                            ],
                           ],
                         )
                       : Wrap(
                           spacing: 16,
                           runSpacing: 16,
                           children: [
-                            for (final section in sections)
-                              SizedBox(width: panelWidth, child: section),
                             SizedBox(
                               width: panelWidth,
-                              child: _BankPanel(banks: banks),
+                              child: _DataPanel(
+                                title: 'Digital card',
+                                data: digital,
+                              ),
                             ),
+                            if (filters.showBusiness)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _DataPanel(
+                                  title: 'Business',
+                                  data: business,
+                                ),
+                              ),
+                            if (filters.showLicenseInfo)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _DataPanel(
+                                  title: 'License info',
+                                  data: license,
+                                ),
+                              ),
+                            if (documents.isNotEmpty)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _DocumentPanel(documents: documents),
+                              ),
+                            if (filters.showAddress &&
+                                visibleAddresses.isNotEmpty)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _AddressPanel(
+                                  addresses: visibleAddresses,
+                                ),
+                              ),
+                            if (filters.showBanks && visibleBanks.isNotEmpty)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _BankPanel(banks: visibleBanks),
+                              ),
                           ],
                         ),
                 ],
@@ -1203,12 +1262,20 @@ class _PreviewPageState extends State<PreviewPage>
             ? const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0C1713), Color(0xFF10221B), Color(0xFF17372F)],
+                colors: [
+                  Color(0xFF0C1713),
+                  Color(0xFF10221B),
+                  Color(0xFF17372F),
+                ],
               )
             : const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF102017), Color(0xFF153727), Color(0xFF173D5A)],
+                colors: [
+                  Color(0xFF102017),
+                  Color(0xFF153727),
+                  Color(0xFF173D5A),
+                ],
               ),
       ),
       child: Row(
@@ -1244,7 +1311,9 @@ class _PreviewPageState extends State<PreviewPage>
               children: [
                 _eyebrow(
                   'Public card preview',
-                  color: isDark ? const Color(0xFFBDE9D3) : const Color(0xFFD4EBDD),
+                  color: isDark
+                      ? const Color(0xFFBDE9D3)
+                      : const Color(0xFFD4EBDD),
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1278,9 +1347,7 @@ class _PreviewPageState extends State<PreviewPage>
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
-                  children: [
-                    if (email.isNotEmpty) _darkTag(email),
-                  ],
+                  children: [if (email.isNotEmpty) _darkTag(email)],
                 ),
               ],
             ),
@@ -1303,7 +1370,9 @@ class _PreviewPageState extends State<PreviewPage>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             color: theme.colorScheme.surface.withValues(alpha: 0.88),
-            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.2),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1395,7 +1464,84 @@ class _PreviewPageState extends State<PreviewPage>
       ),
     );
   }
+}
 
+class _PreviewFilters {
+  const _PreviewFilters({
+    required this.sections,
+    required this.bankIndexes,
+    required this.addressIndexes,
+  });
+
+  final Set<String> sections;
+  final Set<int>? bankIndexes;
+  final Set<int>? addressIndexes;
+
+  factory _PreviewFilters.fromUri(Uri uri) {
+    final sections = _parseCsv(
+      uri.queryParameters['sections'],
+    ).map((value) => value.toLowerCase()).toSet();
+    return _PreviewFilters(
+      sections: sections,
+      bankIndexes: _parseCsv(
+        uri.queryParameters['banks'],
+      ).map(int.tryParse).whereType<int>().toSet(),
+      addressIndexes: _parseCsv(
+        uri.queryParameters['addresses'],
+      ).map(int.tryParse).whereType<int>().toSet(),
+    );
+  }
+
+  bool get showBusiness => sections.isEmpty || sections.contains('business');
+
+  bool get showLicenseInfo => sections.isEmpty || sections.contains('license');
+
+  bool get showBanks => sections.isEmpty || sections.contains('banks');
+
+  bool get showAddress => sections.isEmpty || sections.contains('address');
+
+  List<Map<String, dynamic>> filterIndexed(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      return const [];
+    }
+    if (bankIndexes == null || bankIndexes!.isEmpty) {
+      return items;
+    }
+    return items
+        .asMap()
+        .entries
+        .where((entry) => bankIndexes!.contains(entry.key))
+        .map((entry) => entry.value)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> filterAddress(
+    List<Map<String, dynamic>> addresses,
+  ) {
+    if (addresses.isEmpty) {
+      return const [];
+    }
+    if (addressIndexes == null || addressIndexes!.isEmpty) {
+      return addresses;
+    }
+    return addresses
+        .asMap()
+        .entries
+        .where((entry) => addressIndexes!.contains(entry.key))
+        .map((entry) => entry.value)
+        .toList(growable: false);
+  }
+}
+
+List<String> _parseCsv(String? raw) {
+  if (raw == null || raw.trim().isEmpty) {
+    return const [];
+  }
+  return raw
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
 }
 
 class _PhoneCopyWidget extends StatelessWidget {
@@ -1421,7 +1567,9 @@ class _PhoneCopyWidget extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(999),
               color: isDark
-                  ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.92)
+                  ? theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: 0.92,
+                    )
                   : Colors.white.withValues(alpha: 0.08),
               border: Border.all(
                 color: isDark
@@ -1557,9 +1705,9 @@ class _TopBar extends StatelessWidget {
     required this.currentMode,
     required this.onHome,
     required this.onAbout,
+    required this.onHelp,
+    required this.onPrivacy,
     required this.onOpenApp,
-    required this.themeMode,
-    required this.onThemeModeChanged,
   });
 
   final bool compact;
@@ -1567,44 +1715,13 @@ class _TopBar extends StatelessWidget {
   final _PageMode currentMode;
   final VoidCallback onHome;
   final VoidCallback onAbout;
+  final VoidCallback onHelp;
+  final VoidCallback onPrivacy;
   final VoidCallback onOpenApp;
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final themeLabel = switch (themeMode) {
-      ThemeMode.system => 'Light',
-      ThemeMode.light => 'Light',
-      ThemeMode.dark => 'Dark',
-    };
-    final themeIcon = switch (themeMode) {
-      ThemeMode.system => Icons.light_mode_rounded,
-      ThemeMode.light => Icons.light_mode_rounded,
-      ThemeMode.dark => Icons.dark_mode_rounded,
-    };
-    final themeToggle = FilledButton.tonalIcon(
-      onPressed: () {
-        onThemeModeChanged(
-          switch (themeMode) {
-            ThemeMode.system => ThemeMode.dark,
-            ThemeMode.light => ThemeMode.dark,
-            ThemeMode.dark => ThemeMode.light,
-          },
-        );
-      },
-      icon: Icon(themeIcon, size: compact ? 18 : 20),
-      label: Text(themeLabel),
-      style: FilledButton.styleFrom(
-        padding: EdgeInsets.symmetric(
-          horizontal: veryCompact ? 10 : (compact ? 12 : 14),
-          vertical: compact ? 14 : 16,
-        ),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700),
-      ),
-    );
-
     final appButton = FilledButton(
       onPressed: onOpenApp,
       style: FilledButton.styleFrom(
@@ -1624,8 +1741,6 @@ class _TopBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           appButton,
-          const SizedBox(width: 8),
-          themeToggle,
           if (compact) ...[
             const SizedBox(width: 6),
             PopupMenuButton<String>(
@@ -1635,11 +1750,17 @@ class _TopBar extends StatelessWidget {
                   onHome();
                 } else if (value == 'about') {
                   onAbout();
+                } else if (value == 'help') {
+                  onHelp();
+                } else if (value == 'privacy') {
+                  onPrivacy();
                 }
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'home', child: Text('Home')),
                 PopupMenuItem(value: 'about', child: Text('About')),
+                PopupMenuItem(value: 'help', child: Text('Help')),
+                PopupMenuItem(value: 'privacy', child: Text('Privacy')),
               ],
             ),
           ],
@@ -1701,35 +1822,43 @@ class _TopBar extends StatelessWidget {
             )
           : Row(
               children: [
-                InkWell(
-                  onTap: onHome,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Row(
-                    children: [
-                      const _LogoBadge(),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Cropz Card',
-                            style: TextStyle(
-                              fontSize: compact ? 18 : 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            'Verified agricultural identity',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.62,
+                Flexible(
+                  child: InkWell(
+                    onTap: onHome,
+                    borderRadius: BorderRadius.circular(999),
+                    child: Row(
+                      children: [
+                        const _LogoBadge(),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Cropz Card',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: compact ? 18 : 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
+                              Text(
+                                'Verified agricultural identity',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.62,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Spacer(),
@@ -1744,6 +1873,18 @@ class _TopBar extends StatelessWidget {
                     label: 'About',
                     selected: currentMode == _PageMode.about,
                     onTap: onAbout,
+                  ),
+                  const SizedBox(width: 8),
+                  _NavLink(
+                    label: 'Help',
+                    selected: currentMode == _PageMode.help,
+                    onTap: onHelp,
+                  ),
+                  const SizedBox(width: 8),
+                  _NavLink(
+                    label: 'Privacy',
+                    selected: currentMode == _PageMode.privacy,
+                    onTap: onPrivacy,
                   ),
                   const SizedBox(width: 10),
                 ],
@@ -1836,6 +1977,12 @@ class _PreviewLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final labelColor = isDark
+        ? const Color(0xFFE7F3ED)
+        : Colors.black.withValues(alpha: 0.78);
+    final valueColor = isDark ? const Color(0xFFF7FBF8) : Colors.black;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -1844,19 +1991,13 @@ class _PreviewLine extends StatelessWidget {
             width: 76,
             child: Text(
               label,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: labelColor, fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: valueColor, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -2058,7 +2199,7 @@ class _DataPanel extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: theme.colorScheme.surface.withValues(alpha: 0.94),
+        color: _panelSurfaceColor(theme),
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.85),
         ),
@@ -2070,6 +2211,7 @@ class _DataPanel extends StatelessWidget {
             title,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
+              color: _panelPrimaryTextColor(theme),
             ),
           ),
           const SizedBox(height: 16),
@@ -2077,7 +2219,7 @@ class _DataPanel extends StatelessWidget {
             Text(
               'No data entered',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                color: _panelSecondaryTextColor(theme),
               ),
             )
           else
@@ -2091,9 +2233,7 @@ class _DataPanel extends StatelessWidget {
                       child: Text(
                         _labelize(entry.key),
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.58,
-                          ),
+                          color: _panelMutedTextColor(theme),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -2105,6 +2245,7 @@ class _DataPanel extends StatelessWidget {
                         textAlign: TextAlign.right,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
+                          color: _panelPrimaryTextColor(theme),
                         ),
                       ),
                     ),
@@ -2141,7 +2282,7 @@ class _DocumentPanel extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: theme.colorScheme.surface.withValues(alpha: 0.94),
+        color: _panelSurfaceColor(theme),
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.85),
         ),
@@ -2153,6 +2294,7 @@ class _DocumentPanel extends StatelessWidget {
             'Documents',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
+              color: _panelPrimaryTextColor(theme),
             ),
           ),
           const SizedBox(height: 16),
@@ -2160,7 +2302,7 @@ class _DocumentPanel extends StatelessWidget {
             Text(
               'No data entered',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                color: _panelSecondaryTextColor(theme),
               ),
             )
           else
@@ -2173,9 +2315,7 @@ class _DocumentPanel extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: theme.colorScheme.surfaceContainer.withValues(
-                    alpha: 0.8,
-                  ),
+                  color: _panelInsetColor(theme),
                   border: Border.all(
                     color: theme.colorScheme.outline.withValues(alpha: 0.7),
                   ),
@@ -2191,15 +2331,14 @@ class _DocumentPanel extends StatelessWidget {
                             label,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
+                              color: _panelPrimaryTextColor(theme),
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             fileName,
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.72,
-                              ),
+                              color: _panelSecondaryTextColor(theme),
                             ),
                           ),
                         ],
@@ -2234,7 +2373,7 @@ class _BankPanel extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
-        color: theme.colorScheme.surface.withValues(alpha: 0.74),
+        color: _panelSurfaceColor(theme),
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.12),
         ),
@@ -2246,6 +2385,7 @@ class _BankPanel extends StatelessWidget {
             'Bank accounts',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
+              color: _panelPrimaryTextColor(theme),
             ),
           ),
           const SizedBox(height: 16),
@@ -2253,7 +2393,7 @@ class _BankPanel extends StatelessWidget {
             Text(
               'No data entered',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                color: _panelSecondaryTextColor(theme),
               ),
             )
           else
@@ -2273,9 +2413,7 @@ class _BankPanel extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: theme.colorScheme.surfaceContainer.withValues(
-                    alpha: 0.8,
-                  ),
+                  color: _panelInsetColor(theme),
                   border: Border.all(
                     color: theme.colorScheme.outline.withValues(alpha: 0.7),
                   ),
@@ -2293,8 +2431,7 @@ class _BankPanel extends StatelessWidget {
                                 child: Text(
                                   _labelize(entry.key),
                                   style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.58),
+                                    color: _panelMutedTextColor(theme),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -2306,6 +2443,7 @@ class _BankPanel extends StatelessWidget {
                                   textAlign: TextAlign.right,
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
+                                    color: _panelPrimaryTextColor(theme),
                                   ),
                                 ),
                               ),
@@ -2321,6 +2459,132 @@ class _BankPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AddressPanel extends StatelessWidget {
+  const _AddressPanel({required this.addresses});
+
+  final List<Map<String, dynamic>> addresses;
+
+  @override
+  Widget build(BuildContext context) {
+    final populatedAddresses = addresses
+        .where(_hasMapData)
+        .toList(growable: false);
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: _panelSurfaceColor(theme),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.85),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Address',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: _panelPrimaryTextColor(theme),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (populatedAddresses.isEmpty)
+            Text(
+              'No data entered',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _panelSecondaryTextColor(theme),
+              ),
+            )
+          else
+            ...populatedAddresses.asMap().entries.map((entry) {
+              final address = entry.value;
+              final title = (address['type'] ?? '').toString().trim();
+              final label = title.isEmpty ? 'Address ${entry.key + 1}' : title;
+              final lines = <String>[];
+              for (final key in const [
+                'line1',
+                'line2',
+                'line3',
+                'city',
+                'district',
+                'state',
+                'pincode',
+              ]) {
+                final value = (address[key] ?? '').toString().trim();
+                if (value.isNotEmpty && value.toLowerCase() != 'null') {
+                  lines.add(value);
+                }
+              }
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: _panelInsetColor(theme),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.7),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: _panelPrimaryTextColor(theme),
+                      ),
+                    ),
+                    if (lines.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        lines.join('\n'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: _panelSecondaryTextColor(theme),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+Color _panelSurfaceColor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  return isDark
+      ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.92)
+      : theme.colorScheme.surface.withValues(alpha: 0.94);
+}
+
+Color _panelInsetColor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  return isDark
+      ? theme.colorScheme.surfaceContainer.withValues(alpha: 0.96)
+      : theme.colorScheme.surfaceContainer.withValues(alpha: 0.8);
+}
+
+Color _panelPrimaryTextColor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  return theme.colorScheme.onSurface.withValues(alpha: isDark ? 0.98 : 0.92);
+}
+
+Color _panelSecondaryTextColor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  return theme.colorScheme.onSurface.withValues(alpha: isDark ? 0.88 : 0.72);
+}
+
+Color _panelMutedTextColor(ThemeData theme) {
+  final isDark = theme.brightness == Brightness.dark;
+  return theme.colorScheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.58);
 }
 
 class _LogoBadge extends StatelessWidget {

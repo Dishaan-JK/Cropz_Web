@@ -1,11 +1,11 @@
 {
-    "name": "cropz_web_frontend",
-    "short_name": "cropz_web_frontend",
+    "name": "Cropz Card",
+    "short_name": "Cropz Card",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Cropz Card public profile and support pages.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

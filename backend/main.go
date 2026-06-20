@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ type PreviewResponse struct {
 	LicenseInfo         map[string]string   `json:"licenseInfo"`
 	BankAccounts        []map[string]string `json:"bankAccounts"`
 	Address             map[string]string   `json:"address"`
+	Addresses           []map[string]string `json:"addresses,omitempty"`
 	Documents           []map[string]string `json:"documents"`
 }
 
@@ -29,6 +31,7 @@ func main() {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("/api/cards/", cardHandler)
+	mux.HandleFunc("/api/error-requests", errorRequestHandler)
 
 	addr := envOrDefault("ADDR", ":8080")
 	log.Printf("backend listening on %s", addr)
@@ -54,6 +57,45 @@ func cardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func errorRequestHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodOptions:
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case http.MethodPost:
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		return
+	}
+
+	record := normalizeErrorRequestPayload(payload)
+	missing := missingRequiredErrorRequestFields(record)
+	if len(missing) > 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":   "missing required fields",
+			"missing": missing,
+		})
+		return
+	}
+
+	saved, err := createPocketBaseRecord(record, "PB_ERROR_REQUESTS_COLLECTION", "Error Requests")
+	if err != nil {
+		writeJSON(w, http.StatusAccepted, map[string]string{
+			"id":      "",
+			"warning": "Support draft will open, but automatic request saving is unavailable right now.",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, saved)
 }
 
 func fetchAndNormalizeCard(cardID string) (PreviewResponse, error) {
@@ -95,6 +137,139 @@ func fetchAndNormalizeCard(cardID string) (PreviewResponse, error) {
 		return PreviewResponse{}, err
 	}
 	return normalizePayload(cardID, payload), nil
+}
+
+func normalizeErrorRequestPayload(payload map[string]any) map[string]string {
+	return map[string]string{
+		"requester_name": str(payload["requester_name"]),
+		"requester_email": str(payload["requester_email"]),
+		"issue_type": str(payload["issue_type"]),
+		"date_noticed": str(payload["date_noticed"]),
+		"page_or_screen": str(payload["page_or_screen"]),
+		"device_browser": str(payload["device_browser"]),
+		"what_happened": str(payload["what_happened"]),
+		"expected_result": str(payload["expected_result"]),
+		"steps_tried": str(payload["steps_tried"]),
+		"additional_details": str(payload["additional_details"]),
+		"source_url": str(payload["source_url"]),
+		"source_path": str(payload["source_path"]),
+		"status": str(payload["status"]),
+		"source": str(payload["source"]),
+	}
+}
+
+func missingRequiredErrorRequestFields(payload map[string]string) []string {
+	required := []string{
+		"requester_name",
+		"requester_email",
+		"issue_type",
+		"date_noticed",
+		"page_or_screen",
+		"device_browser",
+		"what_happened",
+	}
+	var missing []string
+	for _, key := range required {
+		if strings.TrimSpace(payload[key]) == "" {
+			missing = append(missing, key)
+		}
+	}
+	return missing
+}
+
+func createPocketBaseRecord(payload map[string]string, collectionEnv, fallbackCollection string) (map[string]any, error) {
+	baseURL := strings.TrimRight(envOrDefault("PB_BASE_URL", "https://cropzcard.pockethost.io"), "/")
+	token := strings.TrimSpace(os.Getenv("PB_AUTH_TOKEN"))
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+	var lastErr error
+	for _, collection := range pocketBaseCollectionCandidates(
+		envOrDefault(collectionEnv, fallbackCollection),
+		fallbackCollection,
+	) {
+		record, err := createPocketBaseRecordInCollection(
+			baseURL,
+			token,
+			collection,
+			body,
+		)
+		if err == nil {
+			return record, nil
+		}
+		lastErr = err
+		if !strings.Contains(err.Error(), "pocketbase returned 404") {
+			return nil, err
+		}
+	}
+
+	return nil, lastErr
+}
+
+func createPocketBaseRecordInCollection(baseURL, token, collection string, body []byte) (map[string]any, error) {
+	endpoint := fmt.Sprintf("%s/api/collections/%s/records", baseURL, url.PathEscape(collection))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pocketbase request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed reading pocketbase response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf(
+			"pocketbase returned %d for collection %q: %s",
+			resp.StatusCode,
+			collection,
+			strings.TrimSpace(string(responseBody)),
+		)
+	}
+
+	var record map[string]any
+	if err := json.Unmarshal(responseBody, &record); err != nil {
+		return nil, fmt.Errorf("invalid pocketbase JSON: %w", err)
+	}
+
+	return record, nil
+}
+
+func pocketBaseCollectionCandidates(values ...string) []string {
+	seen := make(map[string]struct{})
+	var candidates []string
+	for _, value := range values {
+		for _, candidate := range []string{strings.TrimSpace(value), normalizePocketBaseCollectionName(value)} {
+			if candidate == "" {
+				continue
+			}
+			if _, ok := seen[candidate]; ok {
+				continue
+			}
+			seen[candidate] = struct{}{}
+			candidates = append(candidates, candidate)
+		}
+	}
+	return candidates
+}
+
+func normalizePocketBaseCollectionName(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	return normalized
 }
 
 func extractPayload(record map[string]any) (map[string]any, error) {
@@ -139,6 +314,7 @@ func normalizePayload(cardID string, payload map[string]any) PreviewResponse {
 	}
 
 	address := map[string]string{}
+	addressItems := make([]map[string]string, 0, len(addresses))
 	if len(addresses) > 0 {
 		first := mapToStringMap(addresses[0])
 		address = map[string]string{
@@ -150,6 +326,22 @@ func normalizePayload(cardID string, payload map[string]any) PreviewResponse {
 			"district": first["district"],
 			"state":    first["state"],
 			"pincode":  first["pincode"],
+		}
+		for _, row := range addresses {
+			addr := mapToStringMap(row)
+			if len(addr) == 0 {
+				continue
+			}
+			addressItems = append(addressItems, map[string]string{
+				"type":     addr["address_type"],
+				"line1":    addr["address1"],
+				"line2":    addr["address2"],
+				"line3":    addr["address3"],
+				"city":     addr["city"],
+				"district": addr["district"],
+				"state":    addr["state"],
+				"pincode":  addr["pincode"],
+			})
 		}
 	}
 
@@ -214,6 +406,7 @@ func normalizePayload(cardID string, payload map[string]any) PreviewResponse {
 		},
 		BankAccounts: bankItems,
 		Address:      address,
+		Addresses:    addressItems,
 		Documents:    docItems,
 	}
 }
@@ -269,7 +462,7 @@ func mimeTypeForFileName(fileName string) string {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

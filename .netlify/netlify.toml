@@ -1,0 +1,69 @@
+functionsDirectory = "/run/media/dishaan/G/cropz_web/netlify/functions"
+functionsDirectoryOrigin = "config-v1"
+redirectsOrigin = "config"
+plugins = []
+headers = []
+
+[build]
+publish = "/run/media/dishaan/G/cropz_web/frontend/build/web"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "./scripts/netlify_build.sh"
+functions = "/run/media/dishaan/G/cropz_web/netlify/functions"
+
+[build.environment]
+FLUTTER_VERSION = "3.41.9"
+NODE_VERSION = "20"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
+node_bundler = "esbuild"
+
+[[redirects]]
+from = "/api/cards/*"
+to = "/.netlify/functions/cards/:splat"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/error-requests"
+to = "/.netlify/functions/error_requests"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]

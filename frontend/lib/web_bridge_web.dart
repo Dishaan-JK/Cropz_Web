@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
 import 'dart:async';
 import 'dart:html' as html;
 
@@ -8,6 +10,12 @@ StreamSubscription<html.Event> watchDocumentVisibility(
     if (html.document.hidden == true) {
       onHidden();
     }
+  });
+}
+
+StreamSubscription<html.Event> watchNavigation(void Function() onNavigate) {
+  return html.window.onPopState.listen((_) {
+    onNavigate();
   });
 }
 
@@ -24,7 +32,7 @@ void Function() mountHiddenIframe(String src) {
 }
 
 void navigateTo(String path) {
-  html.window.location.href = path;
+  html.window.history.pushState(null, '', path);
 }
 
 void openExternalUrl(String url) {

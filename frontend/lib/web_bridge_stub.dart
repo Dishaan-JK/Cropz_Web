@@ -4,6 +4,10 @@ StreamSubscription<void> watchDocumentVisibility(void Function() onHidden) {
   return const Stream<void>.empty().listen((_) {});
 }
 
+StreamSubscription<void> watchNavigation(void Function() onNavigate) {
+  return const Stream<void>.empty().listen((_) {});
+}
+
 VoidCallback mountHiddenIframe(String src) {
   return () {};
 }

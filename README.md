@@ -20,6 +20,10 @@ Minimal working rebuild with:
 - Action: `Open in App`
   - Tries `cropzcard://card/{id}`
   - If unavailable, shows: `Cropz Card not installed.`
+- Help page support form at `/help`
+  - Saves submitted reports to the PocketBase `Error Requests` collection through `/api/error-requests`
+  - Opens a prefilled support email draft to `cropzsupport@gmail.com`
+  - Uses Gmail compose on web and the Gmail app/`mailto:` flow on non-web builds
 
 ## Run
 ### 1) Local backend
@@ -76,11 +80,13 @@ This repo is now wired for a single Netlify deployment:
 Set these in Site settings > Environment variables:
 - `PB_BASE_URL=https://cropzcard.pockethost.io`
 - `PB_CARDS_COLLECTION=cards`
+- `PB_ERROR_REQUESTS_COLLECTION=Error Requests`
 - `PB_AUTH_TOKEN` if your PocketBase collection is protected
 - `FLUTTER_VERSION=3.41.9` if you want to keep the build pinned
 
 ### Netlify routing
 - `/api/cards/{cardId}` is served by the function
+- `/api/error-requests` is served by the support form function
 - All other routes fall back to `/index.html` so Flutter path routing works
 
 ### Result
