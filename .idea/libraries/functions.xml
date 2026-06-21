@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="functions">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/.netlify/functions/cards.zip!/" />
+      <root url="jar://$PROJECT_DIR$/.netlify/functions/error_requests.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

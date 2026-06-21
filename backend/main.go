@@ -14,7 +14,6 @@ import (
 )
 
 type PreviewResponse struct {
-	CardID              string              `json:"cardId"`
 	Profile             map[string]string   `json:"profile"`
 	DigitalBusinessCard map[string]string   `json:"digitalBusinessCard"`
 	Business            map[string]string   `json:"business"`
@@ -370,7 +369,6 @@ func normalizePayload(cardID string, payload map[string]any) PreviewResponse {
 	}
 
 	return PreviewResponse{
-		CardID: cardID,
 		Profile: map[string]string{
 			"name":      str(profile["firm_name"]),
 			"role":      "Cropz User",
@@ -385,7 +383,6 @@ func normalizePayload(cardID string, payload map[string]any) PreviewResponse {
 			"upiId":     str(profile["upi_id"]),
 			"transport": str(profile["transport"]),
 			"companies": str(profile["companies"]),
-			"recordId":  cardID,
 		},
 		Business: map[string]string{
 			"businessName": str(profile["firm_name"]),

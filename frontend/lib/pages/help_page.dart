@@ -306,7 +306,7 @@ class _HelpPageState extends State<HelpPage> {
                   veryCompact: widget.veryCompact,
                   title: 'Report a problem',
                   subtitle:
-                      'Fill this like a Google Form. We only ask for details that help reproduce the issue and prepare a support email draft.',
+                      'Use this simple report form. We only ask for details that help reproduce the issue and prepare a support email draft.',
                   child: Form(
                     key: _formKey,
                     child: Column(

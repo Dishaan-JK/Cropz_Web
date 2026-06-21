@@ -2180,11 +2180,15 @@ class _DataPanel extends StatelessWidget {
 
   final String title;
   final Map<String, dynamic> data;
+  static const Set<String> _hiddenKeys = {'id', 'cardId', 'recordId'};
 
   @override
   Widget build(BuildContext context) {
     final visibleEntries = data.entries
         .where((entry) {
+          if (_hiddenKeys.contains(entry.key)) {
+            return false;
+          }
           final value = entry.value;
           if (value == null) {
             return false;

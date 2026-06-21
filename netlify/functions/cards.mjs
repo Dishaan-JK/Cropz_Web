@@ -123,7 +123,6 @@ function normalizePayload(cardId, payload) {
     .filter(Boolean);
 
   return {
-    cardId,
     profile: {
       name: toStringValue(profile.firm_name),
       role: 'Cropz User',
@@ -138,7 +137,6 @@ function normalizePayload(cardId, payload) {
       upiId: toStringValue(profile.upi_id),
       transport: toStringValue(profile.transport),
       companies: toStringValue(profile.companies),
-      recordId: cardId,
     },
     business: {
       businessName: toStringValue(profile.firm_name),
