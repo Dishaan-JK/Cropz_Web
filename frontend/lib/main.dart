@@ -1138,6 +1138,15 @@ class _PreviewPageState extends State<PreviewPage>
   }) {
     final visibleBanks = filters.filterIndexed(banks);
     final visibleAddresses = filters.filterAddress(addresses);
+    final showDigitalPanel = _hasVisibleDataEntries(digital);
+    final showBusinessPanel =
+        filters.showBusiness && _hasVisibleDataEntries(business);
+    final showLicensePanel =
+        filters.showLicenseInfo && _hasVisibleDataEntries(license);
+    final showDocumentPanel = documents.any(_hasDocumentData);
+    final showAddressPanel =
+        filters.showAddress && visibleAddresses.any(_hasAddressData);
+    final showBankPanel = filters.showBanks && visibleBanks.any(_hasMapData);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
@@ -1161,26 +1170,25 @@ class _PreviewPageState extends State<PreviewPage>
                   compact
                       ? Column(
                           children: [
-                            _DataPanel(title: 'Digital card', data: digital),
-                            if (filters.showBusiness) ...[
+                            if (showDigitalPanel)
+                              _DataPanel(title: 'Digital card', data: digital),
+                            if (showBusinessPanel) ...[
                               const SizedBox(height: 14),
                               _DataPanel(title: 'Business', data: business),
                             ],
-                            if (filters.showLicenseInfo) ...[
+                            if (showLicensePanel) ...[
                               const SizedBox(height: 14),
                               _DataPanel(title: 'License info', data: license),
                             ],
-                            if (documents.isNotEmpty) ...[
+                            if (showDocumentPanel) ...[
                               const SizedBox(height: 14),
                               _DocumentPanel(documents: documents),
                             ],
-                            if (filters.showAddress &&
-                                visibleAddresses.isNotEmpty) ...[
+                            if (showAddressPanel) ...[
                               const SizedBox(height: 14),
                               _AddressPanel(addresses: visibleAddresses),
                             ],
-                            if (filters.showBanks &&
-                                visibleBanks.isNotEmpty) ...[
+                            if (showBankPanel) ...[
                               const SizedBox(height: 14),
                               _BankPanel(banks: visibleBanks),
                             ],
@@ -1190,14 +1198,15 @@ class _PreviewPageState extends State<PreviewPage>
                           spacing: 16,
                           runSpacing: 16,
                           children: [
-                            SizedBox(
-                              width: panelWidth,
-                              child: _DataPanel(
-                                title: 'Digital card',
-                                data: digital,
+                            if (showDigitalPanel)
+                              SizedBox(
+                                width: panelWidth,
+                                child: _DataPanel(
+                                  title: 'Digital card',
+                                  data: digital,
+                                ),
                               ),
-                            ),
-                            if (filters.showBusiness)
+                            if (showBusinessPanel)
                               SizedBox(
                                 width: panelWidth,
                                 child: _DataPanel(
@@ -1205,7 +1214,7 @@ class _PreviewPageState extends State<PreviewPage>
                                   data: business,
                                 ),
                               ),
-                            if (filters.showLicenseInfo)
+                            if (showLicensePanel)
                               SizedBox(
                                 width: panelWidth,
                                 child: _DataPanel(
@@ -1213,20 +1222,19 @@ class _PreviewPageState extends State<PreviewPage>
                                   data: license,
                                 ),
                               ),
-                            if (documents.isNotEmpty)
+                            if (showDocumentPanel)
                               SizedBox(
                                 width: panelWidth,
                                 child: _DocumentPanel(documents: documents),
                               ),
-                            if (filters.showAddress &&
-                                visibleAddresses.isNotEmpty)
+                            if (showAddressPanel)
                               SizedBox(
                                 width: panelWidth,
                                 child: _AddressPanel(
                                   addresses: visibleAddresses,
                                 ),
                               ),
-                            if (filters.showBanks && visibleBanks.isNotEmpty)
+                            if (showBankPanel)
                               SizedBox(
                                 width: panelWidth,
                                 child: _BankPanel(banks: visibleBanks),
@@ -2473,7 +2481,7 @@ class _AddressPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final populatedAddresses = addresses
-        .where(_hasMapData)
+        .where(_hasAddressData)
         .toList(growable: false);
     final theme = Theme.of(context);
     return Container(
@@ -2508,21 +2516,7 @@ class _AddressPanel extends StatelessWidget {
               final address = entry.value;
               final title = (address['type'] ?? '').toString().trim();
               final label = title.isEmpty ? 'Address ${entry.key + 1}' : title;
-              final lines = <String>[];
-              for (final key in const [
-                'line1',
-                'line2',
-                'line3',
-                'city',
-                'district',
-                'state',
-                'pincode',
-              ]) {
-                final value = (address[key] ?? '').toString().trim();
-                if (value.isNotEmpty && value.toLowerCase() != 'null') {
-                  lines.add(value);
-                }
-              }
+              final lines = _addressLines(address);
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
                 padding: const EdgeInsets.all(18),
@@ -2673,6 +2667,50 @@ String _labelize(String key) {
       .replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(1)}')
       .trim();
   return out.isEmpty ? key : out[0].toUpperCase() + out.substring(1);
+}
+
+bool _hasVisibleDataEntries(Map<String, dynamic> data) {
+  return data.entries.any((entry) {
+    if (_DataPanel._hiddenKeys.contains(entry.key)) {
+      return false;
+    }
+    final value = entry.value;
+    if (value == null) {
+      return false;
+    }
+    final text = value.toString().trim();
+    return text.isNotEmpty && text.toLowerCase() != 'null';
+  });
+}
+
+bool _hasDocumentData(Map<String, dynamic> document) {
+  final label = (document['label'] ?? '').toString().trim();
+  final fileName = (document['fileName'] ?? '').toString().trim();
+  final downloadUrl = (document['downloadUrl'] ?? '').toString().trim();
+  return label.isNotEmpty && fileName.isNotEmpty && downloadUrl.isNotEmpty;
+}
+
+List<String> _addressLines(Map<String, dynamic> address) {
+  final lines = <String>[];
+  for (final key in const [
+    'line1',
+    'line2',
+    'line3',
+    'city',
+    'district',
+    'state',
+    'pincode',
+  ]) {
+    final value = (address[key] ?? '').toString().trim();
+    if (value.isNotEmpty && value.toLowerCase() != 'null') {
+      lines.add(value);
+    }
+  }
+  return lines;
+}
+
+bool _hasAddressData(Map<String, dynamic> address) {
+  return _addressLines(address).isNotEmpty;
 }
 
 bool _hasMapData(Map<String, dynamic> data) {
