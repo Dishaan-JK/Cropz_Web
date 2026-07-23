@@ -82,11 +82,16 @@ Set these in your hosting dashboard:
 - `PB_ERROR_REQUESTS_COLLECTION=Error Requests`
 - `PB_AUTH_TOKEN` if the source collection is protected
 - `FLUTTER_VERSION=3.41.9` if you want to keep the web build pinned
+- `FLUTTER_SDK_DIR` is optional. If omitted, the build script installs Flutter under Netlify's cache directory.
 
 ### Routing
 - `/api/cards/{cardId}` is served by the function
 - `/api/error-requests` is served by the support form function
 - All other routes fall back to `/index.html` so path-based routing works
+
+### Caching
+- Flutter assets and icons are served with long-lived immutable cache headers.
+- `flutter_bootstrap.js` and `main.dart.js` are revalidated on each visit so users receive new deployments promptly.
 
 ### Result
 With this setup, `cropzcard.com` can serve the site and API routes from one deployment.

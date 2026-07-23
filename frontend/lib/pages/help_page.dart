@@ -12,7 +12,6 @@ class HelpPage extends StatefulWidget {
     required this.compact,
     required this.veryCompact,
     required this.onHome,
-    required this.onAbout,
     required this.onPrivacy,
     required this.onOpenApp,
   });
@@ -20,7 +19,6 @@ class HelpPage extends StatefulWidget {
   final bool compact;
   final bool veryCompact;
   final VoidCallback onHome;
-  final VoidCallback onAbout;
   final VoidCallback onPrivacy;
   final VoidCallback onOpenApp;
 
@@ -297,7 +295,6 @@ class _HelpPageState extends State<HelpPage> {
                   compact: widget.compact,
                   veryCompact: widget.veryCompact,
                   onHome: widget.onHome,
-                  onAbout: widget.onAbout,
                   onPrivacy: widget.onPrivacy,
                 ),
                 const SizedBox(height: 20),
@@ -642,14 +639,12 @@ class _FormHero extends StatelessWidget {
     required this.compact,
     required this.veryCompact,
     required this.onHome,
-    required this.onAbout,
     required this.onPrivacy,
   });
 
   final bool compact;
   final bool veryCompact;
   final VoidCallback onHome;
-  final VoidCallback onAbout;
   final VoidCallback onPrivacy;
 
   @override
@@ -672,7 +667,7 @@ class _FormHero extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(32),
               ),
-              color: const Color(0xFF1A7A5C),
+              color: const Color(0xFF2D7A48),
             ),
           ),
           Padding(
@@ -683,7 +678,7 @@ class _FormHero extends StatelessWidget {
                 Text(
                   'Help',
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF1A7A5C),
+                    color: const Color(0xFF2D7A48),
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
                   ),
@@ -715,7 +710,6 @@ class _FormHero extends StatelessWidget {
                   runSpacing: 10,
                   children: [
                     TextButton(onPressed: onHome, child: const Text('Home')),
-                    TextButton(onPressed: onAbout, child: const Text('About')),
                     TextButton(
                       onPressed: onPrivacy,
                       child: const Text('Privacy Policy'),

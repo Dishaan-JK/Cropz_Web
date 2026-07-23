@@ -3,9 +3,9 @@
     "short_name": "Cropz Card",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Cropz Card public profile and support pages.",
+    "background_color": "#F4F7F3",
+    "theme_color": "#194F32",
+    "description": "Digital business cards for agricultural product dealers.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

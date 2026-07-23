@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'pages/help_page.dart';
 import 'pages/privacy_policy_page.dart';
 import 'web_bridge_stub.dart'
@@ -21,16 +23,18 @@ class CropzWebApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF1A7A5C);
+    const seed = Color(0xFF194F32); // New agricultural green from landing page
     final lightScheme =
         ColorScheme.fromSeed(
           seedColor: seed,
           brightness: Brightness.light,
         ).copyWith(
-          surface: const Color(0xFFF8F4EC),
-          surfaceContainer: const Color(0xFFF0E8D8),
-          surfaceContainerHighest: const Color(0xFFE6DBC4),
-          outline: const Color(0xFFCDC2AA),
+          surface: const Color(0xFFF4F7F3), // Cream background
+          surfaceContainer: const Color(0xFFE8F1EC),
+          surfaceContainerHighest: const Color(0xFFDCE6DD),
+          outline: const Color(0xFFDCE6DD), // Line color
+          primary: const Color(0xFF194F32), // Primary green
+          secondary: const Color(0xFF2D7A48), // Medium green
         );
 
     return MaterialApp(
@@ -38,11 +42,11 @@ class CropzWebApp extends StatelessWidget {
       title: 'Cropz Card',
       theme: ThemeData(
         colorScheme: lightScheme,
-        scaffoldBackgroundColor: const Color(0xFFF8F4EC),
+        scaffoldBackgroundColor: const Color(0xFFF4F7F3),
         useMaterial3: true,
         textTheme: Typography.material2021().black,
         dividerTheme: const DividerThemeData(
-          color: Color(0xFFD4C8AF),
+          color: Color(0xFFDCE6DD),
           thickness: 1,
         ),
       ),
@@ -51,7 +55,7 @@ class CropzWebApp extends StatelessWidget {
   }
 }
 
-enum _PageMode { home, about, help, privacy, preview }
+enum _PageMode { home, help, privacy, preview }
 
 class PreviewPage extends StatefulWidget {
   const PreviewPage({super.key});
@@ -70,11 +74,15 @@ class _PreviewPageState extends State<PreviewPage>
   late _PageMode _mode;
   late AnimationController _bgController;
   StreamSubscription<void>? _navigationSub;
+  final ScrollController _homeScrollController = ScrollController();
+  final GlobalKey _featuresKey = GlobalKey();
+  final GlobalKey _howKey = GlobalKey();
+  final GlobalKey _contactKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    _applyUri(Uri.base);
+    _applyUri(kIsWeb ? Uri.base : Uri(path: '/'));
 
     _bgController = AnimationController(
       vsync: this,
@@ -94,6 +102,7 @@ class _PreviewPageState extends State<PreviewPage>
   void dispose() {
     _navigationSub?.cancel();
     _bgController.dispose();
+    _homeScrollController.dispose();
     super.dispose();
   }
 
@@ -105,8 +114,6 @@ class _PreviewPageState extends State<PreviewPage>
     _future = null;
     if (path.isEmpty) {
       _mode = _PageMode.home;
-    } else if (path.first.toLowerCase() == 'about') {
-      _mode = _PageMode.about;
     } else if (path.first.toLowerCase() == 'help') {
       _mode = _PageMode.help;
     } else if (path.first.toLowerCase() == 'privacy') {
@@ -126,7 +133,7 @@ class _PreviewPageState extends State<PreviewPage>
         : Uri.parse(apiBase).resolve('/api/cards/$cardId');
     final res = await http.get(uri);
     if (res.statusCode != 200) {
-      throw Exception('Failed to fetch card: ${res.statusCode}');
+      throw Exception('Could not load card: ${res.statusCode}');
     }
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
@@ -151,7 +158,7 @@ class _PreviewPageState extends State<PreviewPage>
       web_bridge.openExternalUrl(_playStoreUrl);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cropz Card not installed. Opening Play Store.'),
+          content: Text('Cropz Card is not installed. Opening Google Play.'),
         ),
       );
     }
@@ -174,48 +181,66 @@ class _PreviewPageState extends State<PreviewPage>
     });
   }
 
+  void _navigateHomeAndScroll(GlobalKey sectionKey) {
+    if (_mode != _PageMode.home) {
+      web_bridge.navigateTo('/');
+      setState(() {
+        _applyUri(Uri.parse('/'));
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sectionContext = sectionKey.currentContext;
+      if (sectionContext == null) {
+        return;
+      }
+      Scrollable.ensureVisible(
+        sectionContext,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeOutCubic,
+        alignment: 0,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 860;
-    final veryCompact = width < 560;
+    final compact = width < 900;
+    final veryCompact = width < 600;
 
     return Scaffold(
       body: Stack(
         children: [
-          AnimatedBuilder(
-            animation: _bgController,
-            builder: (context, _) {
-              final t = _bgController.value * 2 * math.pi;
-              return CustomPaint(
-                painter: _BackgroundPainter(
-                  t,
-                  brightness: Theme.of(context).brightness,
-                ),
-                size: Size.infinite,
-              );
-            },
-          ),
+          if (_mode == _PageMode.preview)
+            AnimatedBuilder(
+              animation: _bgController,
+              builder: (context, _) {
+                final t = _bgController.value * 2 * math.pi;
+                return CustomPaint(
+                  painter: _BackgroundPainter(
+                    t,
+                    brightness: Theme.of(context).brightness,
+                  ),
+                  size: Size.infinite,
+                );
+              },
+            )
+          else
+            const ColoredBox(color: Colors.white),
           SafeArea(
             child: Column(
               children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    compact ? 14 : 24,
-                    compact ? 10 : 14,
-                    compact ? 14 : 24,
-                    compact ? 6 : 10,
-                  ),
-                  child: _TopBar(
-                    compact: compact,
-                    veryCompact: veryCompact,
-                    currentMode: _mode,
-                    onHome: () => _navigateTo('/'),
-                    onAbout: () => _navigateTo('/about'),
-                    onHelp: () => _navigateTo('/help'),
-                    onPrivacy: () => _navigateTo('/privacy'),
-                    onOpenApp: _openInApp,
-                  ),
+                _TopBar(
+                  compact: compact,
+                  veryCompact: veryCompact,
+                  currentMode: _mode,
+                  onHome: () => _navigateTo('/'),
+                  onFeatures: () => _navigateHomeAndScroll(_featuresKey),
+                  onHow: () => _navigateHomeAndScroll(_howKey),
+                  onContact: () => _navigateHomeAndScroll(_contactKey),
+                  onHelp: () => _navigateTo('/help'),
+                  onPrivacy: () => _navigateTo('/privacy'),
+                  onOpenApp: () => _launchUrl(_playStoreUrl),
                 ),
                 Expanded(
                   child: switch (_mode) {
@@ -223,15 +248,10 @@ class _PreviewPageState extends State<PreviewPage>
                       compact: compact,
                       veryCompact: veryCompact,
                     ),
-                    _PageMode.about => _buildAboutPage(
-                      compact: compact,
-                      veryCompact: veryCompact,
-                    ),
                     _PageMode.help => HelpPage(
                       compact: compact,
                       veryCompact: veryCompact,
                       onHome: () => _navigateTo('/'),
-                      onAbout: () => _navigateTo('/about'),
                       onPrivacy: () => _navigateTo('/privacy'),
                       onOpenApp: _openInApp,
                     ),
@@ -239,7 +259,6 @@ class _PreviewPageState extends State<PreviewPage>
                       compact: compact,
                       veryCompact: veryCompact,
                       onHome: () => _navigateTo('/'),
-                      onAbout: () => _navigateTo('/about'),
                       onHelp: () => _navigateTo('/help'),
                       onOpenApp: _openInApp,
                     ),
@@ -328,49 +347,246 @@ class _PreviewPageState extends State<PreviewPage>
   }
 
   Widget _buildHomePage({required bool compact, required bool veryCompact}) {
-    const sampleCard = {
-      'firm': 'Aadhira Agro Ventures',
-      'owner': 'Keerthi M',
-      'mobile': '9952422147',
-      'role': 'Agri Input Dealer',
-      'location': 'Coimbatore, Tamil Nadu',
-      'gst': 'Verified GST',
-      'whatsapp': 'WhatsApp active',
-      'license': 'License current',
-    };
-
     return ListView(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
+      controller: _homeScrollController,
+      padding: EdgeInsets.zero,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1280),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _heroSection(
-                sampleCard,
-                compact: compact,
-                veryCompact: veryCompact,
+        _landingHero(compact: compact, veryCompact: veryCompact),
+        KeyedSubtree(
+          key: _featuresKey,
+          child: _landingFeatures(compact: compact),
+        ),
+        KeyedSubtree(
+          key: _howKey,
+          child: _landingHowItWorks(compact: compact),
+        ),
+        _landingCta(compact: compact),
+        KeyedSubtree(
+          key: _contactKey,
+          child: _landingFooter(compact: compact),
+        ),
+      ],
+    );
+  }
+
+  Widget _landingHero({required bool compact, required bool veryCompact}) {
+    return Container(
+      constraints: BoxConstraints(minHeight: compact ? 0 : 720),
+      padding: EdgeInsets.symmetric(
+        vertical: veryCompact ? 48 : (compact ? 60 : 76),
+        horizontal: veryCompact ? 14 : 20,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF7FAF6), Colors.white],
+        ),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: veryCompact
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
+                  children: [
+                    _landingHeroCopy(
+                      compact: compact,
+                      veryCompact: veryCompact,
+                    ),
+                    SizedBox(height: veryCompact ? 46 : 42),
+                    _heroVisual(compact: compact, veryCompact: veryCompact),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: 104,
+                      child: _landingHeroCopy(
+                        compact: compact,
+                        veryCompact: veryCompact,
+                      ),
+                    ),
+                    const SizedBox(width: 58),
+                    Expanded(
+                      flex: 96,
+                      child: _heroVisual(
+                        compact: compact,
+                        veryCompact: veryCompact,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _landingHeroCopy({required bool compact, required bool veryCompact}) {
+    final align = veryCompact
+        ? CrossAxisAlignment.start
+        : (compact ? CrossAxisAlignment.center : CrossAxisAlignment.start);
+    return Column(
+      crossAxisAlignment: align,
+      children: [
+        const _LandingEyebrow(text: 'Made for agricultural product dealers'),
+        SizedBox(height: veryCompact ? 0 : 2),
+        Text(
+          'Your professional agri business card, always ready to share.',
+          style: TextStyle(
+            fontSize: veryCompact ? 46 : (compact ? 54 : 76),
+            fontWeight: FontWeight.w800,
+            height: 0.99,
+            letterSpacing: veryCompact ? -2.6 : -4,
+            color: const Color(0xFF13251A),
+          ),
+          textAlign: compact && !veryCompact
+              ? TextAlign.center
+              : TextAlign.left,
+        ),
+        const SizedBox(height: 25),
+        Text(
+          'Create a digital business card in seconds, showcase your professional identity, and help farmers and customers save your details instantly.',
+          style: TextStyle(
+            fontSize: veryCompact ? 17 : 18.5,
+            fontWeight: FontWeight.w400,
+            color: const Color(0xFF617066),
+            height: 1.6,
+          ),
+          textAlign: compact && !veryCompact
+              ? TextAlign.center
+              : TextAlign.left,
+        ),
+        const SizedBox(height: 30),
+        Wrap(
+          spacing: 22,
+          runSpacing: 16,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: compact && !veryCompact
+              ? WrapAlignment.center
+              : WrapAlignment.start,
+          children: [
+            FilledButton(
+              onPressed: () => _launchUrl(_playStoreUrl),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF194F32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(height: 28),
-              _editorialBand(compact: compact),
-              const SizedBox(height: 20),
-              _operationsSection(compact: compact),
-              const SizedBox(height: 20),
-              _showcaseSection(
-                sampleCard,
-                compact: compact,
-                veryCompact: veryCompact,
+              child: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _GooglePlayMark(),
+                    SizedBox(width: 10),
+                    Text('Download on Google Play'),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              _finalCta(compact: compact, veryCompact: veryCompact),
-            ],
+            ),
+            TextButton(
+              onPressed: () => _navigateHomeAndScroll(_featuresKey),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF2D7A48),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Explore features'),
+                  SizedBox(width: 4),
+                  Text('→'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 22,
+          runSpacing: 12,
+          alignment: compact && !veryCompact
+              ? WrapAlignment.center
+              : WrapAlignment.start,
+          children: const [
+            _TrustIndicator(text: 'Easy to create'),
+            _TrustIndicator(text: 'QR-enabled'),
+            _TrustIndicator(text: 'Easy to share'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _heroVisual({required bool compact, required bool veryCompact}) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned.fill(
+          left: compact ? 30 : 70,
+          top: 40,
+          right: compact ? 10 : -40,
+          bottom: -20,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF83C341).withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(240),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF83C341).withValues(alpha: 0.16),
+                  blurRadius: 60,
+                  spreadRadius: 15,
+                ),
+              ],
+            ),
+          ),
+        ),
+        Transform.rotate(
+          angle: veryCompact ? 0 : 0.021,
+          child: _GlossyInteractive(
+            borderRadius: BorderRadius.circular(veryCompact ? 20 : 30),
+            hoverScale: 1.012,
+            shadowColor: const Color(0xFF0D341F),
+            child: Container(
+              constraints: BoxConstraints(maxWidth: compact ? 430 : 480),
+              padding: EdgeInsets.all(veryCompact ? 5 : 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(veryCompact ? 20 : 30),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(veryCompact ? 15 : 22),
+                child: Image.asset(
+                  'assets/images/cropzcard-poster.png',
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
+  // Retained temporarily for compatibility with older preview layouts.
+  // ignore: unused_element
   Widget _heroSection(
     Map<String, String> card, {
     required bool compact,
@@ -437,7 +653,7 @@ class _PreviewPageState extends State<PreviewPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _eyebrow('Verified identity for agri business'),
+          _eyebrow('Verified identity for agricultural businesses'),
           const SizedBox(height: 14),
           body,
         ],
@@ -446,99 +662,18 @@ class _PreviewPageState extends State<PreviewPage>
   }
 
   Widget _heroCopy(TextStyle? headlineStyle) {
-    final theme = Theme.of(context);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 900),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 28 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'The public face of modern agricultural commerce.',
-            style: headlineStyle,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Farmers,\nagri-specialists',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 20),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Text(
-              'Cropz Card turns dealer, distributor, and field-team identity into a clean link that feels credible at first glance and remains useful in daily operations.',
-              style: theme.textTheme.titleMedium?.copyWith(
-                height: 1.5,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: _openInApp,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 18,
-                  ),
-                  backgroundColor: const Color(0xFF1A7A5C),
-                  foregroundColor: Colors.white,
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                icon: const Icon(Icons.arrow_outward_rounded),
-                label: const Text('Open in Cropz Card'),
-              ),
-              OutlinedButton(
-                onPressed: () => _navigateTo('/about'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 18,
-                  ),
-                  side: BorderSide(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.28),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                child: const Text('About the platform'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: const [
-              _MetricPill(value: '10s', label: 'to share a verified link'),
-              _MetricPill(value: '1', label: 'profile for field trust'),
-              _MetricPill(value: '24/7', label: 'public availability'),
-            ],
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Professional identity for agricultural businesses.',
+          style: headlineStyle,
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Create one trusted card, share a clean link, and keep important business details easy to find.',
+        ),
+      ],
     );
   }
 
@@ -659,7 +794,7 @@ class _PreviewPageState extends State<PreviewPage>
                 const SizedBox(height: 22),
                 _PreviewLine(label: 'Owner', value: card['owner']!),
                 _PreviewLine(label: 'Contact', value: card['mobile']!),
-                _PreviewLine(label: 'Signal', value: card['whatsapp']!),
+                _PreviewLine(label: 'Status', value: card['whatsapp']!),
               ],
             ),
           ),
@@ -667,7 +802,7 @@ class _PreviewPageState extends State<PreviewPage>
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              'Editorial presentation outside, operational detail inside. That is the bar for the full web surface.',
+              'A polished introduction outside, with the practical business details inside.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(
                   context,
@@ -681,6 +816,429 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
+  Widget _landingFeatures({required bool compact}) {
+    const features = [
+      (
+        icon: '👤',
+        title: 'Professional identity',
+        description:
+            'Present your name, role, business details and contact information in a clean digital format.',
+      ),
+      (
+        icon: '▦',
+        title: 'QR code enabled',
+        description:
+            'Let customers open your card quickly by scanning a QR code.',
+      ),
+      (
+        icon: '↗',
+        title: 'Easy to share',
+        description:
+            'Share your card through messaging apps and digital channels in a few taps.',
+      ),
+      (
+        icon: '☎',
+        title: 'Save to contacts',
+        description:
+            'Help farmers, retailers and partners save your contact details instantly.',
+      ),
+      (
+        icon: '🌿',
+        title: 'Built for agri retailers',
+        description:
+            'Designed specifically for agricultural product dealers and rural business networks.',
+      ),
+      (
+        icon: '✓',
+        title: 'Simple and focused',
+        description:
+            'Create your card in seconds with the information you publicise most.',
+      ),
+    ];
+
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(
+        vertical: compact ? 76 : 100,
+        horizontal: compact ? 14 : 20,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 760,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _LandingEyebrow(text: 'Everything in one card'),
+                    _LandingSectionTitle(
+                      text:
+                          'A simple way to present and share your agri business.',
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'CropzCard keeps your most important business details together, so customers can connect with you without searching through paper cards or messages.',
+                      style: TextStyle(
+                        fontSize: 17,
+                        color: Color(0xFF617066),
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 48),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth <= 600
+                      ? 1
+                      : (constraints.maxWidth <= 900 ? 2 : 3);
+                  const gap = 20.0;
+                  final cardWidth =
+                      (constraints.maxWidth - (columns - 1) * gap) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final feature in features)
+                        SizedBox(
+                          width: cardWidth,
+                          child: _LandingFeatureCard(
+                            icon: feature.icon,
+                            title: feature.title,
+                            description: feature.description,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _landingHowItWorks({required bool compact}) {
+    return Container(
+      color: const Color(0xFFF4F7F3),
+      padding: EdgeInsets.symmetric(
+        vertical: compact ? 76 : 100,
+        horizontal: compact ? 14 : 20,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth <= 900;
+              final copy = const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _LandingEyebrow(text: 'How it works'),
+                  _LandingSectionTitle(
+                    text: 'From download to sharing in three simple steps.',
+                  ),
+                  SizedBox(height: 20),
+                  Text(
+                    'No complicated setup. Add your details, create your digital card, and start sharing it with customers.',
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: Color(0xFF617066),
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              );
+              final steps = Column(
+                children: const [
+                  _LandingStep(
+                    number: '1',
+                    title: 'Download CropzCard',
+                    description: 'Install the Android app from Google Play.',
+                  ),
+                  SizedBox(height: 16),
+                  _LandingStep(
+                    number: '2',
+                    title: 'Create your profile',
+                    description:
+                        'Add your professional and business contact details.',
+                  ),
+                  SizedBox(height: 16),
+                  _LandingStep(
+                    number: '3',
+                    title: 'Share your card',
+                    description:
+                        'Send your digital card or let customers scan its QR code.',
+                  ),
+                ],
+              );
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [copy, const SizedBox(height: 38), steps],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 88, child: copy),
+                  const SizedBox(width: 80),
+                  Expanded(flex: 112, child: steps),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _landingCta({required bool compact}) {
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.symmetric(
+        vertical: compact ? 60 : 90,
+        horizontal: compact ? 14 : 20,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: _GlossyInteractive(
+            borderRadius: BorderRadius.circular(28),
+            hoverScale: 1.01,
+            shadowColor: const Color(0xFF0D341F),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 26 : 54,
+                vertical: compact ? 34 : 54,
+              ),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF103923), Color(0xFF256941)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final stacked = constraints.maxWidth <= 760;
+                  final copy = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _LandingEyebrow(
+                        text: 'Connecting Farmers. Growing Together.',
+                        light: true,
+                      ),
+                      Text(
+                        'Make your business easier to discover and remember.',
+                        style: TextStyle(
+                          fontSize: compact ? 36 : 52,
+                          height: 1.06,
+                          letterSpacing: -2,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  );
+                  final button = FilledButton(
+                    onPressed: () => _launchUrl(_playStoreUrl),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF194F32),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 21,
+                        vertical: 18,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: const Text('Get CropzCard'),
+                  );
+                  if (stacked) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [copy, const SizedBox(height: 28), button],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: copy),
+                      const SizedBox(width: 40),
+                      button,
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _landingFooter({required bool compact}) {
+    final year = DateTime.now().year;
+    const footerText = Color(0xFFC8D3CC);
+    return Container(
+      color: const Color(0xFF0F2418),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 14 : 20,
+        60,
+        compact ? 14 : 20,
+        22,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final oneColumn = constraints.maxWidth <= 600;
+              final twoColumns =
+                  constraints.maxWidth > 600 && constraints.maxWidth <= 900;
+              final brand = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  _CropzBrand(light: true),
+                  SizedBox(height: 12),
+                  Text(
+                    'Digital business cards for agricultural product dealers.',
+                    style: TextStyle(color: footerText, height: 1.6),
+                  ),
+                ],
+              );
+              final contact = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _FooterHeading('Contact'),
+                  const SizedBox(height: 10),
+                  _footerLink(
+                    'cropzdigitalservices@gmail.com',
+                    () => _launchEmail('cropzdigitalservices@gmail.com'),
+                  ),
+                ],
+              );
+              final links = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _FooterHeading('Links'),
+                  const SizedBox(height: 10),
+                  _footerLink('Google Play', () => _launchUrl(_playStoreUrl)),
+                  _footerLink('Help', () => _navigateTo('/help')),
+                  _footerLink('Privacy Policy', () => _navigateTo('/privacy')),
+                ],
+              );
+              late final Widget columns;
+              if (oneColumn) {
+                columns = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    brand,
+                    const SizedBox(height: 22),
+                    contact,
+                    const SizedBox(height: 22),
+                    links,
+                  ],
+                );
+              } else if (twoColumns) {
+                columns = Wrap(
+                  spacing: 40,
+                  runSpacing: 32,
+                  children: [
+                    SizedBox(
+                      width: (constraints.maxWidth - 40) / 2,
+                      child: brand,
+                    ),
+                    SizedBox(
+                      width: (constraints.maxWidth - 40) / 2,
+                      child: contact,
+                    ),
+                    SizedBox(
+                      width: (constraints.maxWidth - 40) / 2,
+                      child: links,
+                    ),
+                  ],
+                );
+              } else {
+                columns = Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: brand),
+                    const SizedBox(width: 40),
+                    Expanded(flex: 2, child: contact),
+                    const SizedBox(width: 40),
+                    Expanded(flex: 2, child: links),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  columns,
+                  const SizedBox(height: 46),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(top: 20),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      '© $year Cropz Digital Services. All rights reserved.',
+                      style: const TextStyle(fontSize: 13, color: footerText),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _launchEmail(String email) async {
+    final uri = Uri.parse('mailto:$email');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Widget _footerLink(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 14, color: Color(0xFFC8D3CC)),
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
   Widget _editorialBand({required bool compact}) {
     final theme = Theme.of(context);
     return Container(
@@ -704,45 +1262,46 @@ class _PreviewPageState extends State<PreviewPage>
         spacing: 24,
         children: const [
           _StatementBlock(
-            title: 'Trusted first glance',
+            title: 'Trust at first sight',
             body:
-                'Replace screenshot-heavy sharing with a profile that reads like a real business surface.',
+                'Replace forwarded screenshots with a profile that feels like a real business page.',
           ),
           _StatementBlock(
             title: 'Built for field speed',
             body:
-                'Open, verify, call, and continue the conversation without forcing app installation first.',
+                'Open, verify, call, and continue the conversation without requiring an app install first.',
           ),
           _StatementBlock(
-            title: 'Structured depth',
+            title: 'Complete, organized details',
             body:
-                'Licenses, bank details, business identity, and address remain organized when the viewer needs more.',
+                'Licenses, banking details, business identity, and addresses stay organized when viewers need more.',
           ),
         ],
       ),
     );
   }
 
+  // ignore: unused_element
   Widget _operationsSection({required bool compact}) {
     final theme = Theme.of(context);
     final content = [
       const _ProcessStep(
         index: '01',
-        title: 'Publish identity',
+        title: 'Publish the identity',
         body:
-            'A professional card is created once with the same business fields already captured in the app.',
+            'Create a professional card from business information already saved in the app.',
       ),
       const _ProcessStep(
         index: '02',
         title: 'Share a clean link',
         body:
-            'Anyone opening the card gets a polished view first instead of a raw data dump or form-like preview.',
+            'Anyone opening the card sees a polished presentation instead of a raw data list.',
       ),
       const _ProcessStep(
         index: '03',
-        title: 'Move to action',
+        title: 'Move to the next action',
         body:
-            'The viewer can escalate into the app, contact the owner, or validate operational details without friction.',
+            'Viewers can open the app, contact the owner, or confirm operational details with ease.',
       ),
     ];
 
@@ -760,9 +1319,9 @@ class _PreviewPageState extends State<PreviewPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionHeading(
-                  title: 'How the surface should behave',
+                  title: 'How this page should work',
                   body:
-                      'Take cues from product sites that feel composed, calm, and obvious in their hierarchy.',
+                      'Use the calm, organized feel and clear hierarchy of a focused product site.',
                 ),
                 const SizedBox(height: 18),
                 ...content
@@ -777,9 +1336,9 @@ class _PreviewPageState extends State<PreviewPage>
                 Expanded(
                   flex: 7,
                   child: _sectionHeading(
-                    title: 'How the surface should behave',
+                    title: 'How this page should work',
                     body:
-                        'Take cues from product sites that feel composed, calm, and obvious in their hierarchy.',
+                        'Use the calm, organized feel and clear hierarchy of a focused product site.',
                   ),
                 ),
                 const SizedBox(width: 24),
@@ -807,6 +1366,7 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
+  // ignore: unused_element
   Widget _showcaseSection(
     Map<String, String> card, {
     required bool compact,
@@ -848,9 +1408,9 @@ class _PreviewPageState extends State<PreviewPage>
             spacing: 8,
             runSpacing: 8,
             children: [
-              _darkTag('High-trust header'),
-              _darkTag('Readable metadata'),
-              _darkTag('Fast scanning'),
+              _darkTag('Trust-building headline'),
+              _darkTag('Easy-to-read details'),
+              _darkTag('Quickly understood layout'),
             ],
           ),
         ],
@@ -861,27 +1421,27 @@ class _PreviewPageState extends State<PreviewPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeading(
-          title: 'Design stance',
+          title: 'Design direction',
           body:
-              'This version moves away from demo-box UI and toward a premium public-facing product surface.',
+              'This version presents a polished public product page rather than a demo box.',
         ),
         const SizedBox(height: 16),
         const _NoteRow(
-          title: 'Brand-first hero',
+          title: 'Brand first',
           body:
-              'The first viewport now works like a poster with one dominant message and one live preview anchor.',
+              'The first screen works like a poster: one strong message paired with a direct preview.',
         ),
         const SizedBox(height: 12),
         const _NoteRow(
-          title: 'Reduced chrome',
+          title: 'Less unnecessary decoration',
           body:
-              'Sections rely on spacing, contrast, and editorial layout before borders and cards.',
+              'Spacing, contrast, and readable hierarchy carry more weight than excessive borders and cards.',
         ),
         const SizedBox(height: 12),
         const _NoteRow(
           title: 'Clear product motion',
           body:
-              'The page uses subtle entry transitions and animated atmospheric movement instead of decorative noise.',
+              'Subtle entrance and background motion support the page without decorative noise.',
         ),
       ],
     );
@@ -911,6 +1471,7 @@ class _PreviewPageState extends State<PreviewPage>
     );
   }
 
+  // ignore: unused_element
   Widget _finalCta({required bool compact, required bool veryCompact}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -964,7 +1525,7 @@ class _PreviewPageState extends State<PreviewPage>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'A stronger first impression is now the default surface.',
+          'A stronger first impression is now the default experience.',
           style: TextStyle(
             color: headlineColor,
             fontSize: 28,
@@ -974,7 +1535,7 @@ class _PreviewPageState extends State<PreviewPage>
         ),
         SizedBox(height: 10),
         Text(
-          'Use the same web address, keep the current card flow, and present it with the polish expected from a modern product company.',
+          'Use the same web address, keep the current card flow, and present it with modern product polish.',
           style: TextStyle(color: bodyColor, fontSize: 15.5, height: 1.55),
         ),
       ],
@@ -1001,124 +1562,6 @@ class _PreviewPageState extends State<PreviewPage>
             textStyle: const TextStyle(fontWeight: FontWeight.w700),
           ),
           child: const Text('Launch app link'),
-        ),
-        OutlinedButton(
-          onPressed: () => _navigateTo('/about'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: isDark ? Colors.white : Colors.white,
-            side: BorderSide(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.72)
-                  : const Color(0xE6FFFFFF),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            textStyle: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          child: const Text('Read about Cropz Card'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAboutPage({required bool compact, required bool veryCompact}) {
-    return ListView(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: Container(
-            padding: EdgeInsets.all(veryCompact ? 18 : (compact ? 22 : 34)),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(34),
-              color: Theme.of(
-                context,
-              ).colorScheme.surface.withValues(alpha: 0.78),
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.outline.withValues(alpha: 0.14),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _eyebrow('About the platform'),
-                const SizedBox(height: 14),
-                Text(
-                  'Cropz Card is designed for business identity in the agriculture ecosystem.',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontFamily: 'Georgia',
-                    fontWeight: FontWeight.w700,
-                    height: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Text(
-                    'It gives dealers, field agents, distributors, and agri-business operators one public page that can be shared quickly, scanned easily, and trusted immediately.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      height: 1.55,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.78),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                compact
-                    ? Column(
-                        children: const [
-                          _AboutBlock(
-                            title: 'Why it exists',
-                            body:
-                                'Agricultural commerce still depends on repeated calls, forwarded screenshots, and informal trust signals. Cropz Card creates one reliable surface for those first interactions.',
-                          ),
-                          SizedBox(height: 18),
-                          _AboutBlock(
-                            title: 'What it carries',
-                            body:
-                                'The platform organizes profile data, business details, licenses, bank information, and address references into a structure that remains useful in real operations.',
-                          ),
-                          SizedBox(height: 18),
-                          _AboutBlock(
-                            title: 'How it should feel',
-                            body:
-                                'The web experience should feel contemporary and assured, closer to a premium product site than a utilitarian form preview.',
-                          ),
-                        ],
-                      )
-                    : const Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _AboutBlock(
-                              title: 'Why it exists',
-                              body:
-                                  'Agricultural commerce still depends on repeated calls, forwarded screenshots, and informal trust signals. Cropz Card creates one reliable surface for those first interactions.',
-                            ),
-                          ),
-                          SizedBox(width: 18),
-                          Expanded(
-                            child: _AboutBlock(
-                              title: 'What it carries',
-                              body:
-                                  'The platform organizes profile data, business details, licenses, bank information, and address references into a structure that remains useful in real operations.',
-                            ),
-                          ),
-                          SizedBox(width: 18),
-                          Expanded(
-                            child: _AboutBlock(
-                              title: 'How it should feel',
-                              body:
-                                  'The web experience should feel contemporary and assured, closer to a premium product site than a utilitarian form preview.',
-                            ),
-                          ),
-                        ],
-                      ),
-              ],
-            ),
-          ),
         ),
       ],
     );
@@ -1474,6 +1917,364 @@ class _PreviewPageState extends State<PreviewPage>
   }
 }
 
+class _LandingEyebrow extends StatelessWidget {
+  const _LandingEyebrow({required this.text, this.light = false});
+
+  final String text;
+  final bool light;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.6,
+          color: light ? const Color(0xFFB9ED80) : const Color(0xFF2D7A48),
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingSectionTitle extends StatelessWidget {
+  const _LandingSectionTitle({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: width <= 600 ? 36 : (width <= 900 ? 44 : 56),
+        height: 1.06,
+        letterSpacing: width <= 600 ? -1.6 : -2.8,
+        fontWeight: FontWeight.w800,
+        color: const Color(0xFF13251A),
+      ),
+    );
+  }
+}
+
+class _LandingFeatureCard extends StatelessWidget {
+  const _LandingFeatureCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final String icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlossyInteractive(
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 245),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFDCE6DD)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF4F7F3),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                icon,
+                style: const TextStyle(fontSize: 21, color: Color(0xFF194F32)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF13251A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: const TextStyle(
+                fontSize: 15,
+                color: Color(0xFF617066),
+                height: 1.6,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LandingStep extends StatelessWidget {
+  const _LandingStep({
+    required this.number,
+    required this.title,
+    required this.description,
+  });
+
+  final String number;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlossyInteractive(
+      borderRadius: BorderRadius.circular(18),
+      hoverScale: 1.008,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(23),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFDCE6DD)),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: Color(0xFF194F32),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                number,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF13251A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: Color(0xFF617066),
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CropzBrand extends StatelessWidget {
+  const _CropzBrand({this.light = false});
+
+  final bool light;
+
+  @override
+  Widget build(BuildContext context) {
+    final wordColor = light ? Colors.white : const Color(0xFF13251A);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 37,
+          height: 37,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: light
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : const Color(0xFFDCE6DD),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Image.asset(
+            'assets/images/cropzcard-hd-logo.png',
+            width: 37,
+            height: 37,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF83C341), Color(0xFF2D7A48)],
+                  ),
+                ),
+                child: const Text(
+                  'C',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: 'Cropz',
+                style: TextStyle(fontWeight: FontWeight.w800, color: wordColor),
+              ),
+              TextSpan(
+                text: 'Card',
+                style: TextStyle(color: wordColor),
+              ),
+            ],
+          ),
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 21, letterSpacing: -0.6),
+        ),
+      ],
+    );
+  }
+}
+
+class _FooterHeading extends StatelessWidget {
+  const _FooterHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: Colors.white,
+      ),
+    );
+  }
+}
+
+class _GooglePlayMark extends StatelessWidget {
+  const _GooglePlayMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 20,
+      height: 22,
+      child: CustomPaint(painter: _GooglePlayPainter()),
+    );
+  }
+}
+
+class _GooglePlayPainter extends CustomPainter {
+  const _GooglePlayPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * 0.48, size.height * 0.5);
+    canvas.drawPath(
+      Path()
+        ..moveTo(1, 1)
+        ..lineTo(center.dx, center.dy)
+        ..lineTo(1, size.height - 1)
+        ..close(),
+      Paint()..color = const Color(0xFF42D3FF),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(1, 1)
+        ..lineTo(size.width * 0.7, size.height * 0.34)
+        ..lineTo(center.dx, center.dy)
+        ..close(),
+      Paint()..color = const Color(0xFF64E572),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(1, size.height - 1)
+        ..lineTo(center.dx, center.dy)
+        ..lineTo(size.width * 0.7, size.height * 0.66)
+        ..close(),
+      Paint()..color = const Color(0xFFFFD23F),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(center.dx, center.dy)
+        ..lineTo(size.width - 1, size.height * 0.5)
+        ..lineTo(size.width * 0.7, size.height * 0.34)
+        ..lineTo(size.width * 0.7, size.height * 0.66)
+        ..close(),
+      Paint()..color = const Color(0xFFFF5468),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _TrustIndicator extends StatelessWidget {
+  const _TrustIndicator({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.check_circle, size: 16, color: Color(0xFF194F32)),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF617066),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PreviewFilters {
   const _PreviewFilters({
     required this.sections,
@@ -1620,10 +2421,17 @@ class _PhoneCopyWidget extends StatelessWidget {
 }
 
 class _GlossyInteractive extends StatefulWidget {
-  const _GlossyInteractive({required this.child, required this.borderRadius});
+  const _GlossyInteractive({
+    required this.child,
+    required this.borderRadius,
+    this.hoverScale = 1.015,
+    this.shadowColor = Colors.black,
+  });
 
   final Widget child;
   final BorderRadius borderRadius;
+  final double hoverScale;
+  final Color shadowColor;
 
   @override
   State<_GlossyInteractive> createState() => _GlossyInteractiveState();
@@ -1636,7 +2444,6 @@ class _GlossyInteractiveState extends State<_GlossyInteractive> {
   @override
   Widget build(BuildContext context) {
     final active = _hovering || _pressed;
-    final theme = Theme.of(context);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -1644,60 +2451,88 @@ class _GlossyInteractiveState extends State<_GlossyInteractive> {
         _hovering = false;
         _pressed = false;
       }),
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
         child: AnimatedScale(
-          scale: _pressed ? 0.975 : (active ? 1.015 : 1),
+          scale: _pressed ? 0.985 : (active ? widget.hoverScale : 1),
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
+          child: AnimatedSlide(
+            offset: Offset(0, active && !_pressed ? -0.01 : 0),
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              borderRadius: widget.borderRadius,
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withValues(alpha: active ? 0.9 : 0.72),
-                  theme.colorScheme.primary.withValues(
-                    alpha: active ? 0.12 : 0.04,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                borderRadius: widget.borderRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.shadowColor.withValues(
+                      alpha: active ? 0.18 : 0.08,
+                    ),
+                    blurRadius: active ? 32 : 18,
+                    spreadRadius: active ? 1 : 0,
+                    offset: Offset(0, active ? 16 : 8),
                   ),
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: active ? 0.14 : 0.08),
-                  blurRadius: active ? 20 : 12,
-                  offset: Offset(0, active ? 10 : 6),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 1,
-                  top: 1,
-                  right: 1,
-                  height: 16,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: widget.borderRadius,
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white.withValues(alpha: active ? 0.74 : 0.52),
-                          Colors.white.withValues(alpha: 0),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+              child: ClipRRect(
+                borderRadius: widget.borderRadius,
+                child: Stack(
+                  children: [
+                    widget.child,
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AnimatedOpacity(
+                          opacity: active ? 1 : 0.62,
+                          duration: const Duration(milliseconds: 180),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withValues(
+                                    alpha: active ? 0.34 : 0.18,
+                                  ),
+                                  Colors.white.withValues(alpha: 0.06),
+                                  Colors.white.withValues(alpha: 0),
+                                ],
+                                stops: const [0, 0.34, 0.78],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    Positioned(
+                      left: 1,
+                      top: 1,
+                      right: 1,
+                      height: 22,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withValues(
+                                  alpha: active ? 0.56 : 0.32,
+                                ),
+                                Colors.white.withValues(alpha: 0),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                widget.child,
-              ],
+              ),
             ),
           ),
         ),
@@ -1712,7 +2547,9 @@ class _TopBar extends StatelessWidget {
     required this.veryCompact,
     required this.currentMode,
     required this.onHome,
-    required this.onAbout,
+    required this.onFeatures,
+    required this.onHow,
+    required this.onContact,
     required this.onHelp,
     required this.onPrivacy,
     required this.onOpenApp,
@@ -1722,42 +2559,65 @@ class _TopBar extends StatelessWidget {
   final bool veryCompact;
   final _PageMode currentMode;
   final VoidCallback onHome;
-  final VoidCallback onAbout;
+  final VoidCallback onFeatures;
+  final VoidCallback onHow;
+  final VoidCallback onContact;
   final VoidCallback onHelp;
   final VoidCallback onPrivacy;
   final VoidCallback onOpenApp;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final appButton = FilledButton(
       onPressed: onOpenApp,
       style: FilledButton.styleFrom(
-        backgroundColor: const Color(0xFF1A7A5C),
+        backgroundColor: const Color(0xFF194F32),
         foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 14 : 18,
-          vertical: compact ? 14 : 16,
-        ),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      child: Text(compact ? 'Open App' : 'Open in App'),
+      child: const Text('Get the app'),
     );
 
     Widget navButtons() {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          appButton,
+          if (!compact) ...[
+            _NavLink(label: 'Features', onTap: onFeatures),
+            const SizedBox(width: 18),
+            _NavLink(label: 'How it works', onTap: onHow),
+            const SizedBox(width: 18),
+            _NavLink(label: 'Contact', onTap: onContact),
+            const SizedBox(width: 18),
+            _NavLink(
+              label: 'Help',
+              selected: currentMode == _PageMode.help,
+              onTap: onHelp,
+            ),
+            const SizedBox(width: 18),
+            _NavLink(
+              label: 'Privacy Policy',
+              selected: currentMode == _PageMode.privacy,
+              onTap: onPrivacy,
+            ),
+            const SizedBox(width: 18),
+          ],
+          if (!veryCompact) appButton,
           if (compact) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             PopupMenuButton<String>(
               tooltip: 'Menu',
               onSelected: (value) {
                 if (value == 'home') {
                   onHome();
-                } else if (value == 'about') {
-                  onAbout();
+                } else if (value == 'features') {
+                  onFeatures();
+                } else if (value == 'how') {
+                  onHow();
+                } else if (value == 'contact') {
+                  onContact();
                 } else if (value == 'help') {
                   onHelp();
                 } else if (value == 'privacy') {
@@ -1766,9 +2626,11 @@ class _TopBar extends StatelessWidget {
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'home', child: Text('Home')),
-                PopupMenuItem(value: 'about', child: Text('About')),
+                PopupMenuItem(value: 'features', child: Text('Features')),
+                PopupMenuItem(value: 'how', child: Text('How it works')),
+                PopupMenuItem(value: 'contact', child: Text('Contact')),
                 PopupMenuItem(value: 'help', child: Text('Help')),
-                PopupMenuItem(value: 'privacy', child: Text('Privacy')),
+                PopupMenuItem(value: 'privacy', child: Text('Privacy Policy')),
               ],
             ),
           ],
@@ -1777,128 +2639,38 @@ class _TopBar extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 14 : 18,
-        vertical: compact ? 12 : 14,
-      ),
+      height: veryCompact ? 66 : 74,
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(horizontal: veryCompact ? 14 : 20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(compact && veryCompact ? 28 : 999),
-        color: theme.colorScheme.surface.withValues(alpha: 0.94),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.85),
+        color: Colors.white.withValues(alpha: 0.96),
+        border: const Border(bottom: BorderSide(color: Color(0xFFDCE6DD))),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1140),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: onHome,
+                borderRadius: BorderRadius.circular(12),
+                child: const _CropzBrand(),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: navButtons(),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      child: veryCompact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InkWell(
-                  onTap: onHome,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _LogoBadge(),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Cropz Card',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            'Verified agricultural identity',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.62,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                navButtons(),
-              ],
-            )
-          : Row(
-              children: [
-                Flexible(
-                  child: InkWell(
-                    onTap: onHome,
-                    borderRadius: BorderRadius.circular(999),
-                    child: Row(
-                      children: [
-                        const _LogoBadge(),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Cropz Card',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: compact ? 18 : 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                'Verified agricultural identity',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.62,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                if (!compact) ...[
-                  _NavLink(
-                    label: 'Home',
-                    selected: currentMode == _PageMode.home,
-                    onTap: onHome,
-                  ),
-                  const SizedBox(width: 8),
-                  _NavLink(
-                    label: 'About',
-                    selected: currentMode == _PageMode.about,
-                    onTap: onAbout,
-                  ),
-                  const SizedBox(width: 8),
-                  _NavLink(
-                    label: 'Help',
-                    selected: currentMode == _PageMode.help,
-                    onTap: onHelp,
-                  ),
-                  const SizedBox(width: 8),
-                  _NavLink(
-                    label: 'Privacy',
-                    selected: currentMode == _PageMode.privacy,
-                    onTap: onPrivacy,
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                navButtons(),
-              ],
-            ),
     );
   }
 }
@@ -1906,30 +2678,38 @@ class _TopBar extends StatelessWidget {
 class _NavLink extends StatelessWidget {
   const _NavLink({
     required this.label,
-    required this.selected,
     required this.onTap,
+    this.selected = false,
   });
 
   final String label;
-  final bool selected;
   final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return TextButton(
       onPressed: onTap,
       style: TextButton.styleFrom(
         foregroundColor: selected
-            ? theme.colorScheme.onSurface
-            : theme.colorScheme.onSurface.withValues(alpha: 0.66),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+            ? const Color(0xFF194F32)
+            : const Color(0xFF405248),
+        backgroundColor: selected
+            ? const Color(0xFF83C341).withValues(alpha: 0.13)
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        textStyle: TextStyle(
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          fontSize: 14,
+        ),
       ),
       child: Text(label),
     );
   }
 }
 
+// ignore: unused_element
 class _MetricPill extends StatelessWidget {
   const _MetricPill({required this.value, required this.label});
 
@@ -2138,47 +2918,6 @@ class _NoteRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AboutBlock extends StatelessWidget {
-  const _AboutBlock({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: theme.colorScheme.surfaceContainer.withValues(alpha: 0.82),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.75),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              height: 1.6,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -2585,24 +3324,39 @@ Color _panelMutedTextColor(ThemeData theme) {
   return theme.colorScheme.onSurface.withValues(alpha: isDark ? 0.78 : 0.58);
 }
 
+// ignore: unused_element
 class _LogoBadge extends StatelessWidget {
   const _LogoBadge();
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: isDark ? const Color(0xFF2EA97C) : const Color(0xFF1C936B),
-        border: Border.all(
-          color: isDark ? const Color(0xFF7EE0B4) : const Color(0xFF0D5F44),
-          width: 1.2,
+        color: Colors.transparent,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Image.network(
+          'https://maas-log-prod.cn-wlcb.ufileos.com/anthropic/ebcb8b1f-eac5-42ad-b3bb-0063b80c9125/fe173fa39f8e06cc75db0f539afa3fb5.png?UCloudPublicKey=TOKEN_e15ba47a-d098-4fbd-9afc-a0dcf0e4e621&Expires=1784814352&Signature=8Eu6JKbikenMt1IW0qj0T4%2BtmXg=',
+          width: 42,
+          height: 42,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: const Color(0xFF194F32),
+              ),
+              child: const Icon(Icons.eco_rounded, color: Colors.white),
+            );
+          },
         ),
       ),
-      child: const Icon(Icons.eco_rounded, color: Colors.white),
     );
   }
 }
@@ -2663,6 +3417,17 @@ class _BackgroundPainter extends CustomPainter {
 }
 
 String _labelize(String key) {
+  const englishLabels = {
+    'gst': 'GST',
+    'gstNumber': 'GST Number',
+    'ifsc': 'IFSC',
+    'pincode': 'PIN code',
+    'whatsapp': 'WhatsApp',
+  };
+  final label = englishLabels[key];
+  if (label != null) {
+    return label;
+  }
   final out = key
       .replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match.group(1)}')
       .trim();

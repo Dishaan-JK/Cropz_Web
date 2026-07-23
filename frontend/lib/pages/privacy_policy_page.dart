@@ -6,7 +6,6 @@ class PrivacyPolicyPage extends StatelessWidget {
     required this.compact,
     required this.veryCompact,
     required this.onHome,
-    required this.onAbout,
     required this.onHelp,
     required this.onOpenApp,
   });
@@ -14,7 +13,6 @@ class PrivacyPolicyPage extends StatelessWidget {
   final bool compact;
   final bool veryCompact;
   final VoidCallback onHome;
-  final VoidCallback onAbout;
   final VoidCallback onHelp;
   final VoidCallback onOpenApp;
 
@@ -35,7 +33,6 @@ class PrivacyPolicyPage extends StatelessWidget {
                   compact: compact,
                   veryCompact: veryCompact,
                   onHome: onHome,
-                  onAbout: onAbout,
                   onHelp: onHelp,
                 ),
                 const SizedBox(height: 20),
@@ -71,7 +68,7 @@ class PrivacyPolicyPage extends StatelessWidget {
                   child: const _BulletList(
                     items: [
                       'Show the public card view from the saved card record.',
-                      'Navigate users between the home, about, help, and privacy pages.',
+                      'Navigate users between the Home, Help, and Privacy Policy pages.',
                       'Open the native app through the deep link when available.',
                     ],
                   ),
@@ -152,14 +149,12 @@ class _PolicyHero extends StatelessWidget {
     required this.compact,
     required this.veryCompact,
     required this.onHome,
-    required this.onAbout,
     required this.onHelp,
   });
 
   final bool compact;
   final bool veryCompact;
   final VoidCallback onHome;
-  final VoidCallback onAbout;
   final VoidCallback onHelp;
 
   @override
@@ -182,7 +177,7 @@ class _PolicyHero extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(32),
               ),
-              color: const Color(0xFF1A7A5C),
+              color: const Color(0xFF2D7A48),
             ),
           ),
           Padding(
@@ -193,7 +188,7 @@ class _PolicyHero extends StatelessWidget {
                 Text(
                   'Privacy Policy',
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF1A7A5C),
+                    color: const Color(0xFF2D7A48),
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
                   ),
@@ -225,7 +220,6 @@ class _PolicyHero extends StatelessWidget {
                   runSpacing: 10,
                   children: [
                     TextButton(onPressed: onHome, child: const Text('Home')),
-                    TextButton(onPressed: onAbout, child: const Text('About')),
                     TextButton(onPressed: onHelp, child: const Text('Help')),
                   ],
                 ),
