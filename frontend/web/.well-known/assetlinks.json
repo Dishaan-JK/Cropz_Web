@@ -8,7 +8,8 @@
       "namespace": "android_app",
       "package_name": "in.cropz.cropz_app",
       "sha256_cert_fingerprints": [
-        "A1:09:84:25:15:81:DD:04:11:BE:19:1D:78:5B:83:81:16:FE:68:2E:15:3F:AC:CC:E0:F7:BE:F8:6F:68:3E:59"
+        "A1:09:84:25:15:81:DD:04:11:BE:19:1D:78:5B:83:81:16:FE:68:2E:15:3F:AC:CC:E0:F7:BE:F8:6F:68:3E:59",
+        "D3:73:23:B8:C9:86:F0:67:2D:29:97:43:92:7E:4B:53:D7:8D:A8:9E:86:52:6E:95:60:BC:DD:11:67:64:43:C9"
       ]
     }
   }

@@ -235,9 +235,6 @@ class _PreviewPageState extends State<PreviewPage>
                   veryCompact: veryCompact,
                   currentMode: _mode,
                   onHome: () => _navigateTo('/'),
-                  onFeatures: () => _navigateHomeAndScroll(_featuresKey),
-                  onHow: () => _navigateHomeAndScroll(_howKey),
-                  onContact: () => _navigateHomeAndScroll(_contactKey),
                   onHelp: () => _navigateTo('/help'),
                   onPrivacy: () => _navigateTo('/privacy'),
                   onOpenApp: () => _launchUrl(_playStoreUrl),
@@ -2547,9 +2544,6 @@ class _TopBar extends StatelessWidget {
     required this.veryCompact,
     required this.currentMode,
     required this.onHome,
-    required this.onFeatures,
-    required this.onHow,
-    required this.onContact,
     required this.onHelp,
     required this.onPrivacy,
     required this.onOpenApp,
@@ -2559,9 +2553,6 @@ class _TopBar extends StatelessWidget {
   final bool veryCompact;
   final _PageMode currentMode;
   final VoidCallback onHome;
-  final VoidCallback onFeatures;
-  final VoidCallback onHow;
-  final VoidCallback onContact;
   final VoidCallback onHelp;
   final VoidCallback onPrivacy;
   final VoidCallback onOpenApp;
@@ -2585,11 +2576,11 @@ class _TopBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (!compact) ...[
-            _NavLink(label: 'Features', onTap: onFeatures),
-            const SizedBox(width: 18),
-            _NavLink(label: 'How it works', onTap: onHow),
-            const SizedBox(width: 18),
-            _NavLink(label: 'Contact', onTap: onContact),
+            _NavLink(
+              label: 'Home',
+              selected: currentMode == _PageMode.home,
+              onTap: onHome,
+            ),
             const SizedBox(width: 18),
             _NavLink(
               label: 'Help',
@@ -2612,12 +2603,6 @@ class _TopBar extends StatelessWidget {
               onSelected: (value) {
                 if (value == 'home') {
                   onHome();
-                } else if (value == 'features') {
-                  onFeatures();
-                } else if (value == 'how') {
-                  onHow();
-                } else if (value == 'contact') {
-                  onContact();
                 } else if (value == 'help') {
                   onHelp();
                 } else if (value == 'privacy') {
@@ -2626,9 +2611,6 @@ class _TopBar extends StatelessWidget {
               },
               itemBuilder: (context) => const [
                 PopupMenuItem(value: 'home', child: Text('Home')),
-                PopupMenuItem(value: 'features', child: Text('Features')),
-                PopupMenuItem(value: 'how', child: Text('How it works')),
-                PopupMenuItem(value: 'contact', child: Text('Contact')),
                 PopupMenuItem(value: 'help', child: Text('Help')),
                 PopupMenuItem(value: 'privacy', child: Text('Privacy Policy')),
               ],

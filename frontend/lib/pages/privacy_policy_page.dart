@@ -19,9 +19,14 @@ class PrivacyPolicyPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final maxWidth = compact ? 960.0 : 1120.0;
+    final maxWidth = compact ? 960.0 : 1140.0;
     return ListView(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 8, compact ? 16 : 28, 28),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 14 : 20,
+        veryCompact ? 18 : 32,
+        compact ? 14 : 20,
+        28,
+      ),
       children: [
         Center(
           child: ConstrainedBox(
@@ -117,10 +122,32 @@ class PrivacyPolicyPage extends StatelessWidget {
                     children: [
                       FilledButton(
                         onPressed: onOpenApp,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF194F32),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         child: const Text('Open in App'),
                       ),
                       OutlinedButton(
                         onPressed: onHelp,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF194F32),
+                          side: const BorderSide(color: Color(0xFF83C341)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         child: const Text('Go to Help'),
                       ),
                     ],
@@ -159,14 +186,22 @@ class _PolicyHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(veryCompact ? 24 : 32),
-        color: theme.colorScheme.surface.withValues(alpha: 0.96),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF7FAF6), Colors.white],
         ),
+        border: Border.all(color: const Color(0xFFDCE6DD)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D341F).withValues(alpha: 0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +212,9 @@ class _PolicyHero extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(32),
               ),
-              color: const Color(0xFF2D7A48),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF83C341), Color(0xFF2D7A48)],
+              ),
             ),
           ),
           Padding(
@@ -187,7 +224,7 @@ class _PolicyHero extends StatelessWidget {
               children: [
                 Text(
                   'Privacy Policy',
-                  style: theme.textTheme.labelLarge?.copyWith(
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: const Color(0xFF2D7A48),
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
@@ -196,9 +233,10 @@ class _PolicyHero extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   'How Cropz Card handles public card data',
-                  style: theme.textTheme.displaySmall?.copyWith(
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     height: 1.05,
+                    color: const Color(0xFF13251A),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -206,11 +244,9 @@ class _PolicyHero extends StatelessWidget {
                   constraints: const BoxConstraints(maxWidth: 760),
                   child: Text(
                     'This page explains what is shown on public cards, how shared links work, and how viewers can move from the web page into the app.',
-                    style: theme.textTheme.titleMedium?.copyWith(
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       height: 1.55,
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.74,
-                      ),
+                      color: const Color(0xFF617066),
                     ),
                   ),
                 ),
@@ -219,8 +255,8 @@ class _PolicyHero extends StatelessWidget {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
-                    TextButton(onPressed: onHome, child: const Text('Home')),
-                    TextButton(onPressed: onHelp, child: const Text('Help')),
+                    _HeroLink(label: 'Home', onPressed: onHome),
+                    _HeroLink(label: 'Help', onPressed: onHelp),
                   ],
                 ),
               ],
@@ -250,35 +286,113 @@ class _PolicySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: EdgeInsets.all(veryCompact ? 18 : (compact ? 20 : 28)),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(veryCompact ? 22 : 28),
-        color: theme.colorScheme.surface.withValues(alpha: 0.88),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.18),
+    return _ActivePanel(
+      borderRadius: BorderRadius.circular(veryCompact ? 22 : 28),
+      child: Container(
+        padding: EdgeInsets.all(veryCompact ? 18 : (compact ? 20 : 28)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(veryCompact ? 22 : 28),
+          color: Colors.white.withValues(alpha: 0.96),
+          border: Border.all(color: const Color(0xFFDCE6DD)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                height: 1.1,
+                color: const Color(0xFF13251A),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              body,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                height: 1.55,
+                color: const Color(0xFF617066),
+              ),
+            ),
+            if (child != null) ...[const SizedBox(height: 16), child!],
+          ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              height: 1.1,
+    );
+  }
+}
+
+class _HeroLink extends StatelessWidget {
+  const _HeroLink({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF194F32),
+        backgroundColor: const Color(0xFF83C341).withValues(alpha: 0.13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _ActivePanel extends StatefulWidget {
+  const _ActivePanel({required this.child, required this.borderRadius});
+
+  final Widget child;
+  final BorderRadius borderRadius;
+
+  @override
+  State<_ActivePanel> createState() => _ActivePanelState();
+}
+
+class _ActivePanelState extends State<_ActivePanel> {
+  bool _hovering = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _hovering || _pressed;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() {
+        _hovering = false;
+        _pressed = false;
+      }),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.99 : (active ? 1.006 : 1),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              borderRadius: widget.borderRadius,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(
+                    0xFF0D341F,
+                  ).withValues(alpha: active ? 0.15 : 0.07),
+                  blurRadius: active ? 30 : 18,
+                  offset: Offset(0, active ? 16 : 8),
+                ),
+              ],
             ),
+            child: widget.child,
           ),
-          const SizedBox(height: 10),
-          Text(
-            body,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              height: 1.55,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
-            ),
-          ),
-          if (child != null) ...[const SizedBox(height: 16), child!],
-        ],
+        ),
       ),
     );
   }
